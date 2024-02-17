@@ -37,8 +37,10 @@ namespace bookGrabber {
                 Console.WriteLine($"Found {tracks.Length} tracks, downloading...");
                 var asm = Assembly.GetExecutingAssembly();
                 var outPath = Path.GetDirectoryName(asm.Location);
-                if (!string.IsNullOrEmpty(subDir))
+                if (!string.IsNullOrEmpty(subDir)) {
                     outPath = Path.Combine(outPath, subDir);
+                    Directory.CreateDirectory(outPath);
+                }
 
                 foreach (var track in tracks) {
                     var fileName = GetValidFileName(track.title);
@@ -51,7 +53,7 @@ namespace bookGrabber {
                         Console.WriteLine("\t Done!");
                     }
                     catch (Exception ex) {
-                        Console.WriteLine($"\nDownload error: {fileName} from {track.url}");
+                        Console.WriteLine($"\nError getting file from {track.url}: {ex.Message}");
                     }
                 }
 
