@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -14,11 +13,17 @@ namespace bookGrabber {
 
             try {
 
-                if (args.Length < 1)
-                    throw new Exception("Please provide book url");
+                var url = args.Length < 1 ? null : args[0];
+                var subDir = args.Length < 2 ? null : args[1];
 
-                var url = args[0];
-                var subDir = args.Length > 1 ? args[1] : string.Empty;
+                if (string.IsNullOrEmpty(url)) {
+                    Console.Write("Enter book url: ");
+                    url = Console.ReadLine();
+                }
+                if (string.IsNullOrEmpty(subDir)) {
+                    Console.Write("Enter book subDir: ");
+                    subDir = Console.ReadLine();
+                }
 
                 Console.WriteLine("Retrieving book content... ");
                 var content = GetContent(url).TrimEnd();
