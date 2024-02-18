@@ -5,7 +5,7 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/sergiye/bookGrabber/total?style=plastic)
 ![GitHub last commit](https://img.shields.io/github/last-commit/sergiye/bookGrabber?style=plastic)
 
-bookGrabber - utility to retrieve audio book files from site [`Книга в ухе`](https://knigavuhe.org/).
+bookGrabber - utility for obtaining audiobook files from the site [`Книга в ухе`](https://knigavuhe.org/).
 
 ## Features
 
