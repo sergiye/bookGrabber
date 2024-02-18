@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -32,6 +33,9 @@ namespace bookGrabber {
                     throw new Exception("Book url can not be empty");
                 subDir = subDir.Trim();
 
+                Console.CursorVisible = false;
+                Console.Clear();
+
                 WriteLine("Retrieving book content... ");
                 var content = (await GetContent(url)).TrimEnd();
 
@@ -45,60 +49,81 @@ namespace bookGrabber {
                 var tracks = jsonData.FromJson<TrackInfo[]>();
                 if (tracks == null || tracks.Length == 0)
                     throw new Exception("Error getting list of tracks");
-                
-                Write("Found ");
+
+                Write("Downloading ");
                 Write($"{tracks.Length}", ConsoleColor.Green);
-                WriteLine(" tracks, downloading...", ConsoleColor.White);
+                WriteLine(" tracks...", ConsoleColor.White);
+
                 var asm = Assembly.GetExecutingAssembly();
                 var outPath = Path.GetDirectoryName(asm.Location);
                 if (!string.IsNullOrEmpty(subDir)) {
+                    subDir = GetValidFileName(subDir);
                     outPath = Path.Combine(outPath, subDir);
                     Directory.CreateDirectory(outPath);
                 }
+                Write("Target folder: ");
+                WriteLine(outPath, ConsoleColor.Cyan);
 
-                //foreach (var track in tracks) {
-                //    var fileName = GetValidFileName(track.title);
-                //    try {
-                //        Write($"Downloading: {fileName}");
-                //        var outputPath = Path.Combine(outPath, fileName);
-
-                //        using (var wc = new WebClient())
-                //            wc.DownloadFile(track.url, outputPath);
-                //        WriteLine("\t Done!", ConsoleColor.Green);
-                //    }
-                //    catch (Exception ex) {
-                //        WriteLine($"\nError getting file from {track.url}: {ex.Message}", ConsoleColor.Yellow);
-                //    }
-                //}
+                Console.WriteLine();
+                var done = 0;
+                var failed = 0;
+                var progressLine = 7; //7 to 22
+                //todo: var errors = new List<string>();
 
                 var tasks = Enumerable.Range(0, tracks.Length)
                     .Select(async (i) => {
                         var track = tracks[i];
                         var fileName = GetValidFileName(track.title);
+                        if (Path.GetExtension(fileName) != ".mp3")
+                            fileName += ".mp3";
                         try {
                             var outputPath = Path.Combine(outPath, fileName);
                             using (var wc = new WebClient())
                                 await wc.DownloadFileTaskAsync(track.url, outputPath);
                             lock (gate) {
+                                done++;
+                                Console.SetCursorPosition(0, progressLine++);
+                                if (progressLine > 22)
+                                    progressLine = 7;
                                 Write($"{fileName}");
                                 WriteLine("\tDone!", ConsoleColor.Green);
                             }
                         }
                         catch (Exception ex) {
                             lock (gate) {
+                                failed++;
+                                Console.SetCursorPosition(0, progressLine++);
+                                if (progressLine > 22)
+                                    progressLine = 7;
                                 Write($"\nError getting file from {track.url}: ", ConsoleColor.Red);
                                 WriteLine(ex.Message, ConsoleColor.Yellow);
+                            }
+                        }
+                        finally {
+                            lock (gate) {
+                                Console.SetCursorPosition(0, 5);
+                                Write("Total: ", ConsoleColor.White);
+                                Write($"{tracks.Length}", ConsoleColor.Cyan);
+                                Write($", done: ", ConsoleColor.White);
+                                Write($"{done}", ConsoleColor.Green);
+                                if (failed > 0) {
+                                    Write($", failed: ", ConsoleColor.White);
+                                    Write($"{failed}", ConsoleColor.Red);
+                                }
                             }
                         }
                     }).ToArray();
                 await Task.WhenAll(tasks);
 
+                Console.SetCursorPosition(0, 24);
                 WriteLine("Finished");
             }
             catch (Exception ex) {
+                Console.SetCursorPosition(0, 24);
                 WriteLine(ex.Message, ConsoleColor.Red);
             }
 
+            Console.SetCursorPosition(0, 25);
             WriteLine("Press any key to exit...");
             Console.ReadKey();
         }
@@ -127,8 +152,6 @@ namespace bookGrabber {
             foreach (char c in Path.GetInvalidFileNameChars()) {
                 fileName = fileName.Replace(c, '_');
             }
-            if (Path.GetExtension(fileName) != ".mp3")
-                fileName += ".mp3";
             return fileName;
         }
 
