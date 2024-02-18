@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace bookGrabber {
@@ -15,6 +17,7 @@ namespace bookGrabber {
 
         static async Task Main(string[] args) {
 
+            var errors = new Dictionary<string, Exception>();
             try {
                 Console.Clear();
 
@@ -70,7 +73,6 @@ namespace bookGrabber {
 
                 var done = 0;
                 var failed = 0;
-                var progressLine = 7;
                 ShowProgress(tracks.Length, done, failed);
 
                 var tasks = Enumerable.Range(0, tracks.Length)
@@ -83,26 +85,11 @@ namespace bookGrabber {
                             var outputPath = Path.Combine(outPath, fileName);
                             using (var wc = new WebClient())
                                 await wc.DownloadFileTaskAsync(track.url, outputPath);
-                            lock (gate) {
-                                done++;
-                                Console.SetCursorPosition(0, progressLine++);
-                                if (progressLine > 23)
-                                    progressLine = 7;
-                                Write($"{DateTime.Now:G} - ", ConsoleColor.Gray);
-                                Write($"{fileName}", ConsoleColor.Cyan);
-                                Write("\tDone!", ConsoleColor.Green);
-                            }
+                            Interlocked.Increment(ref done);
                         }
                         catch (Exception ex) {
-                            lock (gate) {
-                                failed++;
-                                Console.SetCursorPosition(0, progressLine++);
-                                if (progressLine > 23)
-                                    progressLine = 7;
-                                Write($"{DateTime.Now:G} - ", ConsoleColor.Gray);
-                                Write($"Error loading {track.url}: ", ConsoleColor.Red);
-                                Write(ex.Message, ConsoleColor.Yellow);
-                            }
+                            Interlocked.Increment(ref failed);
+                            errors[track.url] = ex;
                         }
                         finally {
                             ShowProgress(tracks.Length, done, failed);
@@ -110,16 +97,25 @@ namespace bookGrabber {
                     }).ToArray();
                 await Task.WhenAll(tasks);
 
-                Console.SetCursorPosition(0, 25);
+                Console.SetCursorPosition(0, 7);
                 WriteLine("Finished", ConsoleColor.DarkCyan);
             }
             catch (Exception ex) {
-                Console.SetCursorPosition(0, 25);
+                Console.SetCursorPosition(0, 7);
                 WriteLine(ex.Message, ConsoleColor.Red);
             }
 
             Console.CursorVisible = true;
-            Console.SetCursorPosition(0, 27);
+            Console.SetCursorPosition(0, 9);
+
+            if (errors.Count > 0) {
+                WriteLine($"Errors summary:");
+                foreach (var p in errors) {
+                    Write($" - Error loading {p.Key}: ", ConsoleColor.Red);
+                    WriteLine($"{p.Value.Message}", ConsoleColor.Yellow);
+                }
+            }
+
             WriteLine("Press any key to exit...");
             Console.ReadKey();
         }
@@ -135,6 +131,8 @@ namespace bookGrabber {
                     Write($", failed: ", ConsoleColor.White);
                     Write($"{failed}", ConsoleColor.Red);
                 }
+                Write(", completed: ", ConsoleColor.White);
+                Write($"{(done + failed) * 100 / count}%", ConsoleColor.Yellow);
             }
         }
 
