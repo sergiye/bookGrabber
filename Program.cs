@@ -14,13 +14,13 @@ namespace bookGrabber {
     internal class Program {
 
         private static object gate = new object();
+        private static int consoleTop;
 
         static async Task Main(string[] args) {
 
             var errors = new Dictionary<string, Exception>();
-            try {
-                Console.Clear();
 
+            try {
                 var url = args.Length < 1 ? null : args[0];
 
                 if (string.IsNullOrEmpty(url)) {
@@ -51,6 +51,10 @@ namespace bookGrabber {
                     subDir = string.IsNullOrWhiteSpace(value) ? title : GetValidFileName(value, true);
                 }
 
+                var useUri = args.Length < 3 ? false : args[2] == "/u";
+                //Write("Enter 'u' to use url as file name, or smth else to use title: ");
+                //var useUri = Console.ReadLine() == "u";
+
                 var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
                 if (coll.Count == 0 || coll[0].Groups.Count < 2)
                     throw new Exception("No tracks found");
@@ -61,7 +65,6 @@ namespace bookGrabber {
                 if (tracks == null || tracks.Length == 0)
                     throw new Exception("Error getting list of tracks");
 
-                Console.CursorVisible = false;
                 var asm = Assembly.GetExecutingAssembly();
                 var outPath = Path.GetDirectoryName(asm.Location);
                 if (!string.IsNullOrEmpty(subDir)) {
@@ -71,6 +74,9 @@ namespace bookGrabber {
                 Write("Target folder: ");
                 WriteLine(outPath, ConsoleColor.DarkCyan);
 
+                Console.CursorVisible = false;
+                consoleTop = Console.CursorTop;
+
                 var done = 0;
                 var failed = 0;
                 ShowProgress(tracks.Length, done, failed);
@@ -78,7 +84,15 @@ namespace bookGrabber {
                 var tasks = Enumerable.Range(0, tracks.Length)
                     .Select(async (i) => {
                         var track = tracks[i];
-                        var fileName = GetValidFileName(track.title, false);
+
+                        string fileName = GetValidFileName(track.title, false);
+                        if (useUri) {
+                            Uri uri = new Uri(track.url);
+                            if (uri.IsFile)
+                                fileName = Path.GetFileName(uri.LocalPath);
+                            else if (uri.Segments != null && uri.Segments.Length > 0 && uri.Segments[uri.Segments.Length - 1].EndsWith(".mp3"))
+                                fileName = uri.Segments[uri.Segments.Length - 1];
+                        }
                         if (Path.GetExtension(fileName) != ".mp3")
                             fileName += ".mp3";
                         try {
@@ -97,16 +111,16 @@ namespace bookGrabber {
                     }).ToArray();
                 await Task.WhenAll(tasks);
 
-                Console.SetCursorPosition(0, 7);
+                Console.SetCursorPosition(0, consoleTop + 3);
                 WriteLine("Finished", ConsoleColor.DarkCyan);
             }
             catch (Exception ex) {
-                Console.SetCursorPosition(0, 7);
+                Console.SetCursorPosition(0, consoleTop + 3);
                 WriteLine(ex.Message, ConsoleColor.Red);
             }
 
             Console.CursorVisible = true;
-            Console.SetCursorPosition(0, 9);
+            Console.SetCursorPosition(0, consoleTop + 5);
 
             if (errors.Count > 0) {
                 WriteLine($"Errors summary:");
@@ -122,7 +136,7 @@ namespace bookGrabber {
 
         private static void ShowProgress(int count, int done, int failed) {
             lock (gate) {
-                Console.SetCursorPosition(0, 5);
+                Console.SetCursorPosition(0, consoleTop + 1);
                 Write("Downloading ", ConsoleColor.White);
                 Write($"{count}", ConsoleColor.Cyan);
                 Write(" tracks, done: ", ConsoleColor.White);
