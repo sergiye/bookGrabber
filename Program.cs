@@ -51,6 +51,7 @@ namespace bookGrabber {
                     subDir = string.IsNullOrWhiteSpace(value) ? title : GetValidFileName(value, true);
                 }
 
+                var useTitle = args.Length < 3 ? false : args[2] == "/t";
                 var useUri = args.Length < 3 ? false : args[2] == "/u";
                 //Write("Enter 'u' to use url as file name, or smth else to use title: ");
                 //var useUri = Console.ReadLine() == "u";
@@ -85,8 +86,11 @@ namespace bookGrabber {
                     .Select(async (i) => {
                         var track = tracks[i];
 
-                        string fileName = GetValidFileName(track.title, false);
-                        if (useUri) {
+                        var fileName = $"{i.ToString().PadLeft(tracks.Length.ToString().Length, '0')}.mp3";
+                        if (useTitle) {
+                            fileName =  GetValidFileName(track.title, false);
+                        }
+                        else if (useUri) {
                             Uri uri = new Uri(track.url);
                             if (uri.IsFile)
                                 fileName = Path.GetFileName(uri.LocalPath);
@@ -95,6 +99,7 @@ namespace bookGrabber {
                         }
                         if (Path.GetExtension(fileName) != ".mp3")
                             fileName += ".mp3";
+
                         try {
                             var outputPath = Path.Combine(outPath, fileName);
                             using (var wc = new WebClient())
