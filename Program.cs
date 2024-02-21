@@ -53,8 +53,12 @@ namespace bookGrabber {
 
                 var useTitle = args.Length < 3 ? false : args[2] == "/t";
                 var useUri = args.Length < 3 ? false : args[2] == "/u";
-                //Write("Enter 'u' to use url as file name, or smth else to use title: ");
-                //var useUri = Console.ReadLine() == "u";
+                if (args.Length == 0) {
+                    Write("Get file names from: 't' (title), 'u' (url), or 'n' (number, by default): ");
+                    var value = Console.ReadLine();
+                    useUri = value == "u";
+                    useTitle = value == "t";
+                }
 
                 var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
                 if (coll.Count == 0 || coll[0].Groups.Count < 2)
