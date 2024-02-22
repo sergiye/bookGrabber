@@ -84,7 +84,7 @@ namespace bookGrabber {
 
                 var done = 0;
                 var failed = 0;
-                ShowProgress(tracks.Length, done, failed);
+                ShowProgress(tracks.Length, done, failed, title);
 
                 var tasks = Enumerable.Range(0, tracks.Length)
                     .Select(async (i) => {
@@ -115,7 +115,7 @@ namespace bookGrabber {
                             errors[track.url] = ex;
                         }
                         finally {
-                            ShowProgress(tracks.Length, done, failed);
+                            ShowProgress(tracks.Length, done, failed, title);
                         }
                     }).ToArray();
                 await Task.WhenAll(tasks);
@@ -139,11 +139,11 @@ namespace bookGrabber {
                 }
             }
 
-            WriteLine("Press any key to exit...");
-            Console.ReadKey();
+            WriteLine("Press 'Enter' to exit...");
+            Console.ReadLine();
         }
 
-        private static void ShowProgress(int count, int done, int failed) {
+        private static void ShowProgress(int count, int done, int failed, string title) {
             lock (gate) {
                 Console.SetCursorPosition(0, consoleTop + 1);
                 Write("Downloading ", ConsoleColor.White);
@@ -155,7 +155,9 @@ namespace bookGrabber {
                     Write($"{failed}", ConsoleColor.Red);
                 }
                 Write(", completed: ", ConsoleColor.White);
-                Write($"{(done + failed) * 100 / count}%", ConsoleColor.Yellow);
+                var percents = (done + failed) * 100 / count;
+                Write($"{percents}%", ConsoleColor.Yellow);
+                Console.Title = $"{percents}% - '{title}'";
             }
         }
 
