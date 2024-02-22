@@ -8,12 +8,13 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using TagLib;
 
 namespace bookGrabber {
 
     internal class Program {
 
-        private static object gate = new object();
+        private static readonly object gate = new object();
         private static int consoleTop;
 
         static async Task Main(string[] args) {
@@ -35,11 +36,28 @@ namespace bookGrabber {
                 var content = (await GetContent(url)).TrimEnd();
                 WriteLine($"\tDone!", ConsoleColor.Green);
 
+                var author = string.Empty;
+                var bookTitle = string.Empty;
                 var title = string.Empty;
-                var pTitle = Regex.Matches(content, @"<meta property=""og:title"" content=""([^>]+)>");
-                if (pTitle.Count != 0 && pTitle[0].Groups.Count > 1) {
-                    title = GetValidFileName(pTitle[0].Groups[1].Value, true);
-                    Console.Title = $"Downloading: '{title}'";
+                var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^-]+) - ([^>]+)>");
+                if (matches.Count != 0 && matches[0].Groups.Count > 1) {
+                    author = GetValidFileName(matches[0].Groups[1].Value, true);
+                    bookTitle = GetValidFileName(matches[0].Groups[2].Value, true);
+                    title = $"{author} - {bookTitle}";
+                    Console.Title = title;
+                }
+
+                Picture bookImage = null;
+                matches = Regex.Matches(content, @"class=""book_cover"">\s+<img\ssrc=""([^""]+)""");
+                if (matches.Count != 0 && matches[0].Groups.Count > 1) {
+                    var bookImgUrl = matches[0].Groups[1].Value;
+                    Write("Retrieving book image... ");
+                    var bookImageFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
+                    using (var wc = new WebClient())
+                        await wc.DownloadFileTaskAsync(bookImgUrl, bookImageFilePath);
+                    bookImage = new Picture(bookImageFilePath);
+                    System.IO.File.Delete(bookImageFilePath);
+                    WriteLine($"\tDone!", ConsoleColor.Green);
                 }
 
                 var subDir = args.Length < 2 ? null : args[1];
@@ -51,8 +69,8 @@ namespace bookGrabber {
                     subDir = string.IsNullOrWhiteSpace(value) ? title : GetValidFileName(value, true);
                 }
 
-                var useTitle = args.Length < 3 ? false : args[2] == "/t";
-                var useUri = args.Length < 3 ? false : args[2] == "/u";
+                var useTitle = args.Length > 2 && args[2] == "/t";
+                var useUri = args.Length > 2 && args[2] == "/u";
                 if (args.Length == 0) {
                     Write("Get file names from: 't' (title), 'u' (url), or 'n' (number, by default): ");
                     var value = Console.ReadLine();
@@ -108,6 +126,26 @@ namespace bookGrabber {
                             var outputPath = Path.Combine(outPath, fileName);
                             using (var wc = new WebClient())
                                 await wc.DownloadFileTaskAsync(track.url, outputPath);
+
+                            var f = TagLib.File.Create(outputPath);
+                            //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
+                            f.Tag.Track = (uint)i;
+                            f.Tag.TrackCount = (uint)tracks.Length;
+                            if (string.IsNullOrEmpty(f.Tag.Title))
+                                f.Tag.Title = track.title;
+                            if (string.IsNullOrEmpty(f.Tag.Album))
+                                f.Tag.Album = bookTitle;
+                            if (f.Tag.Performers == null || f.Tag.Performers.Length == 0 || string.IsNullOrEmpty(f.Tag.Performers[0]))
+                                f.Tag.Performers = new[] { author };
+                            if (f.Tag.AlbumArtists == null || f.Tag.AlbumArtists.Length == 0 || string.IsNullOrEmpty(f.Tag.AlbumArtists[0]))
+                                f.Tag.AlbumArtists = new[] { author };
+
+                            if ((f.Tag.Pictures == null || f.Tag.Pictures.Length == 0) &&
+                                bookImage != null && bookImage.Type != PictureType.NotAPicture) {
+                                f.Tag.Pictures = new IPicture[1] { bookImage };
+                            }
+                            f.Save();
+
                             Interlocked.Increment(ref done);
                         }
                         catch (Exception ex) {
@@ -157,7 +195,7 @@ namespace bookGrabber {
                 Write(", completed: ", ConsoleColor.White);
                 var percents = (done + failed) * 100 / count;
                 Write($"{percents}%", ConsoleColor.Yellow);
-                Console.Title = $"{percents}% - '{title}'";
+                Console.Title = $"{percents}% {title}";
             }
         }
 

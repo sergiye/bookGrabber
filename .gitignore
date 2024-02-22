@@ -51,3 +51,4 @@ node_modules/
 .DS_Store
 ui/dist/
 
+/FodyWeavers.xsd
