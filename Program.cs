@@ -107,8 +107,9 @@ namespace bookGrabber {
                 var tasks = Enumerable.Range(0, tracks.Length)
                     .Select(async (i) => {
                         var track = tracks[i];
+                        var trackNum = i + 1;
 
-                        var fileName = $"{i.ToString().PadLeft(tracks.Length.ToString().Length, '0')}.mp3";
+                        var fileName = $"{trackNum.ToString().PadLeft(tracks.Length.ToString().Length, '0')}.mp3";
                         if (useTitle) {
                             fileName =  GetValidFileName(track.title, false);
                         }
@@ -129,21 +130,16 @@ namespace bookGrabber {
 
                             var f = TagLib.File.Create(outputPath);
                             //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
-                            f.Tag.Track = (uint)i;
+                            f.Tag.Track = (uint)trackNum;
                             f.Tag.TrackCount = (uint)tracks.Length;
                             if (string.IsNullOrEmpty(f.Tag.Title))
                                 f.Tag.Title = track.title;
-                            if (string.IsNullOrEmpty(f.Tag.Album))
-                                f.Tag.Album = bookTitle;
-                            if (f.Tag.Performers == null || f.Tag.Performers.Length == 0 || string.IsNullOrEmpty(f.Tag.Performers[0]))
-                                f.Tag.Performers = new[] { author };
-                            if (f.Tag.AlbumArtists == null || f.Tag.AlbumArtists.Length == 0 || string.IsNullOrEmpty(f.Tag.AlbumArtists[0]))
-                                f.Tag.AlbumArtists = new[] { author };
-
-                            if ((f.Tag.Pictures == null || f.Tag.Pictures.Length == 0) &&
-                                bookImage != null && bookImage.Type != PictureType.NotAPicture) {
+                            f.Tag.Album = bookTitle;
+                            f.Tag.Performers = new[] { author };
+                            f.Tag.AlbumArtists = new[] { author };
+                            if (bookImage != null && bookImage.Type != PictureType.NotAPicture)
                                 f.Tag.Pictures = new IPicture[1] { bookImage };
-                            }
+
                             f.Save();
 
                             Interlocked.Increment(ref done);
