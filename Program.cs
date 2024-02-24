@@ -39,7 +39,7 @@ namespace bookGrabber {
                 var author = string.Empty;
                 var bookTitle = string.Empty;
                 var title = string.Empty;
-                var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^-]+) - ([^>]+)>");
+                var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^-]+) - ([^>]+)"">");
                 if (matches.Count != 0 && matches[0].Groups.Count > 1) {
                     author = GetValidFileName(matches[0].Groups[1].Value, true);
                     bookTitle = GetValidFileName(matches[0].Groups[2].Value, true);
@@ -48,7 +48,7 @@ namespace bookGrabber {
                 }
 
                 Picture bookImage = null;
-                matches = Regex.Matches(content, @"class=""book_cover"">\s+<img\ssrc=""([^""]+)""");
+                matches = Regex.Matches(content, @"<meta property=""og:image"" content=""([^>]+)"">");
                 if (matches.Count != 0 && matches[0].Groups.Count > 1) {
                     var bookImgUrl = matches[0].Groups[1].Value;
                     Write("Retrieving book image... ");
