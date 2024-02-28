@@ -69,14 +69,14 @@ namespace bookGrabber {
                     subDir = string.IsNullOrWhiteSpace(value) ? title : GetValidFileName(value, true);
                 }
 
-                var useTitle = args.Length > 2 && args[2] == "/t";
-                var useUri = args.Length > 2 && args[2] == "/u";
-                if (args.Length == 0) {
-                    Write("Get file names from: 't' (title), 'u' (url), or 'n' (number, by default): ");
-                    var value = Console.ReadLine();
-                    useUri = value == "u";
-                    useTitle = value == "t";
-                }
+                // var useTitle = args.Length > 2 && args[2] == "/t";
+                // var useUri = args.Length > 2 && args[2] == "/u";
+                // if (args.Length == 0) {
+                //     Write("Get file names from: 't' (title), 'u' (url), or 'n' (number, by default): ");
+                //     var value = Console.ReadLine();
+                //     useUri = value == "u";
+                //     useTitle = value == "t";
+                // }
 
                 var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
                 if (coll.Count == 0 || coll[0].Groups.Count < 2)
@@ -110,16 +110,16 @@ namespace bookGrabber {
                         var trackNum = i + 1;
 
                         var fileName = $"{trackNum.ToString().PadLeft(tracks.Length.ToString().Length, '0')}.mp3";
-                        if (useTitle) {
-                            fileName =  GetValidFileName(track.title, false);
-                        }
-                        else if (useUri) {
-                            Uri uri = new Uri(track.url);
-                            if (uri.IsFile)
-                                fileName = Path.GetFileName(uri.LocalPath);
-                            else if (uri.Segments != null && uri.Segments.Length > 0 && uri.Segments[uri.Segments.Length - 1].EndsWith(".mp3"))
-                                fileName = uri.Segments[uri.Segments.Length - 1];
-                        }
+                        // if (useTitle) {
+                        //     fileName =  GetValidFileName(track.title, false);
+                        // }
+                        // else if (useUri) {
+                        //     Uri uri = new Uri(track.url);
+                        //     if (uri.IsFile)
+                        //         fileName = Path.GetFileName(uri.LocalPath);
+                        //     else if (uri.Segments != null && uri.Segments.Length > 0 && uri.Segments[uri.Segments.Length - 1].EndsWith(".mp3"))
+                        //         fileName = uri.Segments[uri.Segments.Length - 1];
+                        // }
                         if (Path.GetExtension(fileName) != ".mp3")
                             fileName += ".mp3";
 
