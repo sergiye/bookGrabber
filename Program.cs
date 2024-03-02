@@ -158,8 +158,7 @@ namespace bookGrabber {
                 WriteLine("Finished", ConsoleColor.DarkCyan);
             }
             catch (Exception ex) {
-                Console.SetCursorPosition(0, consoleTop + 3);
-                WriteLine(ex.Message, ConsoleColor.Red);
+                errors["internal"] = ex;
             }
 
             Console.CursorVisible = true;
@@ -171,10 +170,9 @@ namespace bookGrabber {
                     Write($" - Error loading {p.Key}: ", ConsoleColor.Red);
                     WriteLine($"{p.Value.Message}", ConsoleColor.Yellow);
                 }
+                WriteLine("Press 'Enter' to exit...");
+                Console.ReadLine();
             }
-
-            WriteLine("Press 'Enter' to exit...");
-            Console.ReadLine();
         }
 
         private static void ShowProgress(int count, int done, int failed, string title) {
