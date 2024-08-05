@@ -190,6 +190,14 @@ namespace bookGrabber {
                 var percents = (done + failed) * 100 / count;
                 Write($"{percents}%", ConsoleColor.Yellow);
                 Console.Title = $"{percents}% {title}";
+                
+                var state = failed > 0
+                    ? TaskbarProgressHelper.TaskbarStates.Error
+                    : done < count
+                        ? TaskbarProgressHelper.TaskbarStates.Normal
+                        : TaskbarProgressHelper.TaskbarStates.Indeterminate;
+                TaskbarProgressHelper.SetState(state);
+                TaskbarProgressHelper.SetValue(done, count);
             }
         }
 
