@@ -103,6 +103,8 @@ namespace bookGrabber {
                 var done = 0;
                 var failed = 0;
                 ShowProgress(tracks.Length, done, failed, title);
+                TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Normal);
+                TaskbarProgressHelper.SetValue(done, tracks.Length);
 
                 var tasks = Enumerable.Range(0, tracks.Length)
                     .Select(async (i) => {
@@ -125,8 +127,13 @@ namespace bookGrabber {
 
                         try {
                             var outputPath = Path.Combine(outPath, fileName);
-                            using (var wc = new WebClient())
-                                await wc.DownloadFileTaskAsync(track.url, outputPath);
+                            var fileInfo = new FileInfo(outputPath);
+                            if (fileInfo.Exists && fileInfo.Length > 0) {
+                                Interlocked.Increment(ref done);
+                                return;
+                            }
+
+                            await DownloadFile(track.url, outputPath);
 
                             var f = TagLib.File.Create(outputPath);
                             //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
@@ -150,9 +157,13 @@ namespace bookGrabber {
                         }
                         finally {
                             ShowProgress(tracks.Length, done, failed, title);
+                            if (failed > 0)
+                                TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Error);
+                            TaskbarProgressHelper.SetValue(done, tracks.Length);
                         }
                     }).ToArray();
                 await Task.WhenAll(tasks);
+                TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.NoProgress);
 
                 Console.SetCursorPosition(0, consoleTop + 3);
                 WriteLine("Finished", ConsoleColor.DarkCyan);
@@ -190,35 +201,56 @@ namespace bookGrabber {
                 var percents = (done + failed) * 100 / count;
                 Write($"{percents}%", ConsoleColor.Yellow);
                 Console.Title = $"{percents}% {title}";
-                
-                var state = failed > 0
-                    ? TaskbarProgressHelper.TaskbarStates.Error
-                    : done < count
-                        ? TaskbarProgressHelper.TaskbarStates.Normal
-                        : TaskbarProgressHelper.TaskbarStates.Indeterminate;
-                TaskbarProgressHelper.SetState(state);
-                TaskbarProgressHelper.SetValue(done, count);
             }
         }
 
         private static async Task<string> GetContent(string uri, int timeout = 10, string method = "GET") {
+            
             var request = (HttpWebRequest)WebRequest.Create(uri);
             request.Method = method;
             request.Timeout = timeout * 1000;
-            request.UserAgent =
-              "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.500.27 Safari/537.36";
+            request.UserAgent = "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.500.27 Safari/537.36";
             //request.Accept = "text/xml,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8";
             request.ContentType = "application/json; charset=utf-8";
             using (var webResp = await request.GetResponseAsync()) {
                 using (var stream = webResp.GetResponseStream()) {
                     if (stream == null) return null;
                     var answer = new StreamReader(stream, Encoding.UTF8);
-                    var result = answer.ReadToEnd();
+                    var result = await answer.ReadToEndAsync();
                     return result;
                 }
             }
         }
 
+        private static async Task DownloadFile(string url, string outputPath, int retries = 3) {
+            
+            // var tryNum = 1;
+            // while (tryNum < retries) {
+            //     try {
+                    using(var wc = new WebClient())
+                        await wc.DownloadFileTaskAsync(url, outputPath);
+            //     }
+            //     catch (Exception ex) {
+            //         if (ex is WebException webEx && webEx.Response is HttpWebResponse response) {
+            //             switch ((WebExceptionStatus) response.StatusCode) {
+            //                 case WebExceptionStatus.ConnectFailure:
+            //                 case WebExceptionStatus.ReceiveFailure:
+            //                 case WebExceptionStatus.RequestCanceled:
+            //                 case WebExceptionStatus.ProtocolError:
+            //                 case WebExceptionStatus.ConnectionClosed:
+            //                 case WebExceptionStatus.KeepAliveFailure:
+            //                 case WebExceptionStatus.Pending:
+            //                 case WebExceptionStatus.Timeout:
+            //                 case WebExceptionStatus.ProxyNameResolutionFailure:
+            //                     tryNum++;
+            //                     continue;
+            //             }
+            //         }
+            //         throw;
+            //     }
+            // }
+        }
+        
         private static string GetValidFileName(string fileName, bool allowEmpty) {
             if (string.IsNullOrWhiteSpace(fileName) && !allowEmpty)
                 throw new ArgumentException("File name can not be empty.");
