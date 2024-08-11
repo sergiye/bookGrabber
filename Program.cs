@@ -151,6 +151,12 @@ namespace bookGrabber {
                 else if (f.Tag.AlbumArtists[0] != author)
                   f.Tag.AlbumArtists = new[] { author }.Union(f.Tag.AlbumArtists).ToArray();
 
+                var comment = $"saved by bookGrabber from {url}";
+                if (string.IsNullOrWhiteSpace(f.Tag.Comment))
+                  f.Tag.Comment = comment;
+                else 
+                  f.Tag.Comment += "\n" + comment;
+
                 if (bookImage != null && bookImage.Type != PictureType.NotAPicture)
                   f.Tag.Pictures = new IPicture[1] { bookImage };
 
