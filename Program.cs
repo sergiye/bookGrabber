@@ -106,8 +106,12 @@ namespace bookGrabber {
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Normal);
         TaskbarProgressHelper.SetValue(done, tracks.Length);
 
+#if !DEBUG
         var tasks = Enumerable.Range(0, tracks.Length)
             .Select(async (i) => {
+#else
+        for (var i = 0; i < tracks.Length; i++) {
+#endif
               var track = tracks[i];
               var trackNum = i + 1;
 
@@ -130,7 +134,11 @@ namespace bookGrabber {
                 var fileInfo = new FileInfo(outputPath);
                 if (fileInfo.Exists && fileInfo.Length > 0) {
                   Interlocked.Increment(ref done);
+#if !DEBUG
                   return;
+#else
+                  continue;
+#endif                  
                 }
 
                 await DownloadFile(track.url, outputPath);
@@ -174,8 +182,12 @@ namespace bookGrabber {
                   TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Error);
                 TaskbarProgressHelper.SetValue(done, tracks.Length);
               }
+#if !DEBUG              
             }).ToArray();
         await Task.WhenAll(tasks);
+#else
+        }
+#endif        
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.NoProgress);
 
         Console.SetCursorPosition(0, consoleTop + 3);
