@@ -129,8 +129,8 @@ namespace bookGrabber {
               if (Path.GetExtension(fileName) != ".mp3")
                 fileName += ".mp3";
 
+              var outputPath = Path.Combine(outPath, fileName);
               try {
-                var outputPath = Path.Combine(outPath, fileName);
                 var fileInfo = new FileInfo(outputPath);
                 if (fileInfo.Exists && fileInfo.Length > 0) {
                   Interlocked.Increment(ref done);
@@ -175,6 +175,7 @@ namespace bookGrabber {
               catch (Exception ex) {
                 Interlocked.Increment(ref failed);
                 errors[track.url] = ex;
+                System.IO.File.Delete(outputPath);
               }
               finally {
                 ShowProgress(tracks.Length, done, failed, title);
