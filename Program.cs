@@ -19,16 +19,24 @@ namespace bookGrabber {
 
     static async Task Main(string[] args) {
 
+      var url = args.Length < 1 ? null : args[0];
+
+      if (string.IsNullOrEmpty(url)) {
+        Write("Enter book or book sequence url: ");
+        url = Console.ReadLine();
+      }
+      
+      var subDir = args.Length < 2 ? null : args[1];
+
+      await DownloadBook(url, subDir, true);
+    }
+
+    static async Task DownloadBook(string url, string subDir = null, bool askForSubDir = false) {
+
       var errors = new Dictionary<string, Exception>();
+      var nextBookUrl = string.Empty;
 
       try {
-        var url = args.Length < 1 ? null : args[0];
-
-        if (string.IsNullOrEmpty(url)) {
-          Write("Enter book url: ");
-          url = Console.ReadLine();
-        }
-
         if (string.IsNullOrWhiteSpace(url))
           throw new Exception("Book url can not be empty");
 
@@ -39,11 +47,32 @@ namespace bookGrabber {
         var author = string.Empty;
         var bookTitle = string.Empty;
         var title = string.Empty;
+        var sequenceNumber = 0;
+
+        //var sequences = Regex.Matches(content, @"<a href=""([^""]+)"" class=""bookkitem_name"">");
+        var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s+<span class=""book_serie_block_item_index"">(\d+)\.<\/span>(\s+<a href=""([^""]+)"">)?");
+        if (sequences.Count > 0) {
+          for(var i = 0; i < sequences.Count; i++) {
+            if (sequences[i].Groups[3].Success == false) {
+              if (int.TryParse(sequences[i].Groups[1].Value, out var number))
+                sequenceNumber = number;
+
+              if (sequences.Count > i + 1) {
+                nextBookUrl = sequences[i+1].Groups[3].Value;
+                if (!nextBookUrl.StartsWith("http")) {
+                  nextBookUrl = "https://knigavuhe.org" + nextBookUrl;
+                }
+              }
+              break;
+            }
+          }
+        }
+
         var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^-]+) - ([^>]+)"">");
         if (matches.Count != 0 && matches[0].Groups.Count > 1) {
           author = GetValidFileName(matches[0].Groups[1].Value, true);
           bookTitle = GetValidFileName(matches[0].Groups[2].Value, true);
-          title = $"{author} - {bookTitle}";
+          title = sequenceNumber > 0 ? $"{author} - {sequenceNumber} - {bookTitle}" : $"{author} - {bookTitle}";
           Console.Title = title;
         }
 
@@ -60,7 +89,9 @@ namespace bookGrabber {
           WriteLine($"\tDone!", ConsoleColor.Green);
         }
 
-        var subDir = args.Length < 2 ? null : args[1];
+        if (!askForSubDir) {
+          subDir = title;
+        }
         if (string.IsNullOrEmpty(subDir)) {
           Write("Press 'Enter' to use '");
           Write($"{title}", ConsoleColor.Yellow);
@@ -209,6 +240,9 @@ namespace bookGrabber {
         }
         WriteLine("Press 'Enter' to exit...");
         Console.ReadLine();
+      }
+      else if (!string.IsNullOrEmpty(nextBookUrl)) {
+        await DownloadBook(nextBookUrl);
       }
     }
 
