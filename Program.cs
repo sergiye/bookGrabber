@@ -68,7 +68,7 @@ namespace bookGrabber {
           }
         }
 
-        var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^-]+) - ([^>]+)"">");
+        var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^""]+) - ([^>]+)"">");
         if (matches.Count != 0 && matches[0].Groups.Count > 1) {
           author = GetValidFileName(matches[0].Groups[1].Value, true);
           bookTitle = GetValidFileName(matches[0].Groups[2].Value, true);
@@ -90,7 +90,7 @@ namespace bookGrabber {
         }
 
         if (!askForSubDir) {
-          subDir = title;
+          subDir = GetValidFileName(title, true);
         }
         if (string.IsNullOrEmpty(subDir)) {
           Write("Press 'Enter' to use '");
@@ -317,7 +317,7 @@ namespace bookGrabber {
       foreach (char c in Path.GetInvalidFileNameChars()) {
         fileName = fileName.Replace(c, ' ').Trim();
       }
-      return fileName;
+      return fileName.TrimEnd('.');
     }
 
     private static void WriteLine(string message = null, ConsoleColor? color = null, ConsoleColor? backColor = null) {
