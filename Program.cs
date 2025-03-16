@@ -48,8 +48,12 @@ namespace bookGrabber {
         var bookTitle = string.Empty;
         var title = string.Empty;
         var sequenceNumber = 0;
+        var sequenceName = string.Empty;
 
-        //var sequences = Regex.Matches(content, @"<a href=""([^""]+)"" class=""bookkitem_name"">");
+        var sequenceNameMatch = Regex.Match(content, @"<div class=""book_serie_block_title"">\s+.+>([^>]+)<\/a>");
+        if (sequenceNameMatch.Success) {
+          sequenceName = sequenceNameMatch.Groups[1].Value;
+        }
         var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s+<span class=""book_serie_block_item_index"">(\d+)\.<\/span>(\s+<a href=""([^""]+)"">)?");
         if (sequences.Count > 0) {
           for(var i = 0; i < sequences.Count; i++) {
@@ -72,7 +76,12 @@ namespace bookGrabber {
         if (matches.Count != 0 && matches[0].Groups.Count > 1) {
           author = GetValidFileName(matches[0].Groups[1].Value, true);
           bookTitle = GetValidFileName(matches[0].Groups[2].Value, true);
-          title = sequenceNumber > 0 ? $"{author} - {sequenceNumber} - {bookTitle}" : $"{author} - {bookTitle}";
+          if (!string.IsNullOrEmpty(sequenceName))
+            title = sequenceNumber > 0 ? $"{sequenceName} - {sequenceNumber}. {author} - {bookTitle}" : $"{author} - {bookTitle}";
+          else if (sequenceNumber > 0)
+            title = $"{author} - {sequenceNumber} - {bookTitle}";
+          else
+            title = $"{author} - {bookTitle}";
           Console.Title = title;
         }
 
