@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,7 +30,7 @@ namespace bookGrabber {
       await DownloadBook(url, subDir, true);
     }
 
-    static async Task DownloadBook(string url, string subDir = null, bool askForSubDir = false) {
+    static async Task DownloadBook(string url, string subDir = null, bool isFirstBook = false) {
 
       var errors = new Dictionary<string, Exception>();
       var nextBookUrl = string.Empty;
@@ -98,7 +97,7 @@ namespace bookGrabber {
           WriteLine($"\tDone!", ConsoleColor.Green);
         }
 
-        if (!askForSubDir) {
+        if (!isFirstBook) {
           subDir = GetValidFileName(title, true);
         }
         if (string.IsNullOrEmpty(subDir)) {
@@ -251,6 +250,11 @@ namespace bookGrabber {
         Console.ReadLine();
       }
       else if (!string.IsNullOrEmpty(nextBookUrl)) {
+        if (isFirstBook) {
+          WriteLine("Press 'Esc' to exit or any other key to download other sequence books...");
+          if (Console.ReadKey().Key == ConsoleKey.Escape)
+            return;
+        }
         await DownloadBook(nextBookUrl);
       }
     }
@@ -273,21 +277,11 @@ namespace bookGrabber {
       }
     }
 
-    private static async Task<string> GetContent(string uri, int timeout = 10, string method = "GET") {
-
-      var request = (HttpWebRequest)WebRequest.Create(uri);
-      request.Method = method;
-      request.Timeout = timeout * 1000;
-      request.UserAgent = "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.500.27 Safari/537.36";
-      //request.Accept = "text/xml,text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8";
-      request.ContentType = "application/json; charset=utf-8";
-      using (var webResp = await request.GetResponseAsync()) {
-        using (var stream = webResp.GetResponseStream()) {
-          if (stream == null) return null;
-          var answer = new StreamReader(stream, Encoding.UTF8);
-          var result = await answer.ReadToEndAsync();
-          return result;
-        }
+    private static async Task<string> GetContent(string uri) {
+      using (var wc = new WebClient()) {
+        //wc.Headers.Add("user-agent", "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.500.27 Safari/537.36");
+        wc.Headers.Add("content-type", "application/json; charset=utf-8");
+        return await wc.DownloadStringTaskAsync(uri).ConfigureAwait(false);
       }
     }
 
