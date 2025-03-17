@@ -62,8 +62,15 @@ namespace bookGrabber {
 
               if (sequences.Count > i + 1) {
                 nextBookUrl = sequences[i+1].Groups[3].Value;
-                if (!nextBookUrl.StartsWith("http")) {
-                  nextBookUrl = "https://knigavuhe.org" + nextBookUrl;
+                if (!string.IsNullOrEmpty(nextBookUrl)) {
+                  if (!nextBookUrl.StartsWith("http")) {
+                    nextBookUrl = "https://knigavuhe.org" + nextBookUrl;
+                  }
+                  if (isFirstBook) {
+                    WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
+                    if (Console.ReadKey().Key == ConsoleKey.Escape)
+                      nextBookUrl = null;
+                  }
                 }
               }
               break;
@@ -250,11 +257,6 @@ namespace bookGrabber {
         Console.ReadLine();
       }
       else if (!string.IsNullOrEmpty(nextBookUrl)) {
-        if (isFirstBook) {
-          WriteLine("Press 'Esc' to exit or any other key to download other sequence books...");
-          if (Console.ReadKey().Key == ConsoleKey.Escape)
-            return;
-        }
         await DownloadBook(nextBookUrl);
       }
     }
