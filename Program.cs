@@ -18,6 +18,10 @@ namespace bookGrabber {
 
     static async Task Main(string[] args) {
 
+      ServicePointManager.Expect100Continue = false;
+      ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+      ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
+
       var url = args.Length < 1 ? null : args[0];
 
       if (string.IsNullOrEmpty(url)) {
