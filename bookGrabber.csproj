@@ -18,6 +18,7 @@
     <Content Include="app.ico" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="sergiye.Common" Version="1.*" />
     <PackageReference Include="Costura.Fody" Version="4.1.0" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>

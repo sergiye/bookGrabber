@@ -1,4 +1,5 @@
-﻿using System;
+﻿using sergiye.Common;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -87,9 +88,9 @@ namespace bookGrabber {
           author = GetValidFileName(matches[0].Groups[1].Value, true);
           bookTitle = GetValidFileName(matches[0].Groups[2].Value, true);
           if (!string.IsNullOrEmpty(sequenceName))
-            title = sequenceNumber > 0 ? $"{sequenceName} - {sequenceNumber}. {author} - {bookTitle}" : $"{author} - {bookTitle}";
+            title = sequenceNumber > 0 ? $"{author} - {sequenceName} - {sequenceNumber}. {bookTitle}" : $"{author} - {bookTitle}";
           else if (sequenceNumber > 0)
-            title = $"{author} - {sequenceNumber} - {bookTitle}";
+            title = $"{author} - {sequenceNumber}. {bookTitle}";
           else
             title = $"{author} - {bookTitle}";
           Console.Title = title;
