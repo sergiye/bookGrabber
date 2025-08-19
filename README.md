@@ -11,6 +11,12 @@ bookGrabber - utility for obtaining audiobook files from the site [`Книга �
 - when launched without parameters, `url` and `subDir` (the name of the folder where to download) can be entered manually
 - no installation required, all in 1 executable file
 
+## What does it look like?
+
+Here's a preview of the app running on Windows 10:
+
+[<img src="https://github.com/sergiye/bookGrabber/raw/master/preview.png" alt="preview"/>](https://github.com/sergiye/bookGrabber/raw/master/preview.png)
+
 ## Download Latest Version
 
 The published version can be obtained from [releases](https://github.com/sergiye/bookGrabber/releases) page, or get the newer one directly from:
