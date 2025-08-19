@@ -20,7 +20,7 @@ namespace bookGrabber {
     static async Task Main(string[] args) {
 
       ServicePointManager.Expect100Continue = false;
-      ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+      ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
       ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
 
       var url = args.Length < 1 ? null : args[0];
@@ -288,6 +288,7 @@ namespace bookGrabber {
       using (var wc = new WebClient()) {
         //wc.Headers.Add("user-agent", "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.500.27 Safari/537.36");
         wc.Headers.Add("content-type", "application/json; charset=utf-8");
+        wc.Headers.Add("referer", "https://knigavuhe.org/");
         return await wc.DownloadStringTaskAsync(uri).ConfigureAwait(false);
       }
     }
