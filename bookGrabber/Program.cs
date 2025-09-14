@@ -242,7 +242,7 @@ namespace bookGrabber {
 #endif        
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.NoProgress);
 
-        Console.SetCursorPosition(0, consoleTop + 3);
+        SafeSetCursorPosition(0, consoleTop + 3);
         WriteLine("Finished", ConsoleColor.DarkCyan);
       }
       catch (Exception ex) {
@@ -250,7 +250,7 @@ namespace bookGrabber {
       }
 
       Console.CursorVisible = true;
-      Console.SetCursorPosition(0, consoleTop + 5);
+      SafeSetCursorPosition(0, consoleTop + 5);
 
       if (errors.Count > 0) {
         WriteLine($"Errors summary:");
@@ -268,7 +268,7 @@ namespace bookGrabber {
 
     private static void ShowProgress(int count, int done, int failed, string title) {
       lock (gate) {
-        Console.SetCursorPosition(0, consoleTop + 1);
+        SafeSetCursorPosition(0, consoleTop + 1);
         Write("Downloading ", ConsoleColor.White);
         Write($"{count}", ConsoleColor.Cyan);
         Write(" tracks, done: ", ConsoleColor.White);
@@ -281,6 +281,21 @@ namespace bookGrabber {
         var percents = (done + failed) * 100 / count;
         Write($"{percents}%", ConsoleColor.Yellow);
         Console.Title = $"{percents}% {title}";
+      }
+    }
+
+    public static void SafeSetCursorPosition(int x, int y) {
+      try {
+        var maxX = Math.Max(0, Console.BufferWidth - 1);
+        var maxY = Math.Max(0, Console.BufferHeight - 1);
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (x > maxX) x = maxX;
+        if (y > maxY) y = maxY;
+        Console.SetCursorPosition(x, y);
+      }
+      catch (ArgumentOutOfRangeException) {
+        Console.SetCursorPosition(0, Math.Max(0, Console.BufferHeight - 1));
       }
     }
 
@@ -325,7 +340,7 @@ namespace bookGrabber {
     private static string GetValidFileName(string fileName, bool allowEmpty) {
       if (string.IsNullOrWhiteSpace(fileName) && !allowEmpty)
         throw new ArgumentException("File name can not be empty.");
-      foreach (char c in Path.GetInvalidFileNameChars()) {
+      foreach (var c in Path.GetInvalidFileNameChars()) {
         fileName = fileName.Replace(c, ' ').Trim();
       }
       return fileName.TrimEnd('.');
