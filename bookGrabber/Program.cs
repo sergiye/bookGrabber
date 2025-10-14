@@ -157,89 +157,80 @@ namespace bookGrabber {
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Normal);
         TaskbarProgressHelper.SetValue(done, tracks.Length);
 
-#if !DEBUG
-        var tasks = Enumerable.Range(0, tracks.Length)
-            .Select(async (i) => {
-#else
-        for (var i = 0; i < tracks.Length; i++) {
-#endif
-              var track = tracks[i];
-              var trackNum = i + 1;
+        var maxDownloadThreads = Environment.ProcessorCount;
+        var semaphore = new SemaphoreSlim(maxDownloadThreads, maxDownloadThreads);
+        await Task.WhenAll(Enumerable.Range(0, tracks.Length).Select(async (i) => {
+          await semaphore.WaitAsync();
 
-              var fileName = $"{trackNum.ToString().PadLeft(tracks.Length.ToString().Length, '0')}.mp3";
-              // if (useTitle) {
-              //     fileName =  GetValidFileName(track.title, false);
-              // }
-              // else if (useUri) {
-              //     Uri uri = new Uri(track.url);
-              //     if (uri.IsFile)
-              //         fileName = Path.GetFileName(uri.LocalPath);
-              //     else if (uri.Segments != null && uri.Segments.Length > 0 && uri.Segments[uri.Segments.Length - 1].EndsWith(".mp3"))
-              //         fileName = uri.Segments[uri.Segments.Length - 1];
-              // }
-              if (Path.GetExtension(fileName) != ".mp3")
-                fileName += ".mp3";
+          var track = tracks[i];
+          var trackNum = i + 1;
+          var fileName = $"{trackNum.ToString().PadLeft(tracks.Length.ToString().Length, '0')}.mp3";
+          // if (useTitle) {
+          //     fileName =  GetValidFileName(track.title, false);
+          // }
+          // else if (useUri) {
+          //     Uri uri = new Uri(track.url);
+          //     if (uri.IsFile)
+          //         fileName = Path.GetFileName(uri.LocalPath);
+          //     else if (uri.Segments != null && uri.Segments.Length > 0 && uri.Segments[uri.Segments.Length - 1].EndsWith(".mp3"))
+          //         fileName = uri.Segments[uri.Segments.Length - 1];
+          // }
+          if (Path.GetExtension(fileName) != ".mp3")
+            fileName += ".mp3";
 
-              var outputPath = Path.Combine(outPath, fileName);
-              try {
-                var fileInfo = new FileInfo(outputPath);
-                if (fileInfo.Exists && fileInfo.Length > 0) {
-                  Interlocked.Increment(ref done);
-#if !DEBUG
-                  return;
-#else
-                  continue;
-#endif                  
-                }
+          var outputPath = Path.Combine(outPath, fileName);
+          
+          try {
+            var fileInfo = new FileInfo(outputPath);
+            if (fileInfo.Exists && fileInfo.Length > 0) {
+              Interlocked.Increment(ref done);
+              return;
+            }
 
-                await DownloadFile(track.url, outputPath);
+            await DownloadFile(track.url, outputPath);
 
-                var f = TagLib.File.Create(outputPath);
-                //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
-                f.Tag.Track = (uint)trackNum;
-                f.Tag.TrackCount = (uint)tracks.Length;
-                if (string.IsNullOrEmpty(f.Tag.Title))
-                  f.Tag.Title = track.title;
-                f.Tag.Album = bookTitle;
-                if (f.Tag.Performers == null || f.Tag.Performers.Length == 0)
-                  f.Tag.Performers = new[] { author };
-                else if (f.Tag.Performers[0] != author)
-                  f.Tag.Performers = new[] { author }.Union(f.Tag.Performers).ToArray();
-                if (f.Tag.AlbumArtists == null || f.Tag.AlbumArtists.Length == 0)
-                  f.Tag.AlbumArtists = new[] { author };
-                else if (f.Tag.AlbumArtists[0] != author)
-                  f.Tag.AlbumArtists = new[] { author }.Union(f.Tag.AlbumArtists).ToArray();
+            var f = TagLib.File.Create(outputPath);
+            //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
+            f.Tag.Track = (uint)trackNum;
+            f.Tag.TrackCount = (uint)tracks.Length;
+            if (string.IsNullOrEmpty(f.Tag.Title))
+              f.Tag.Title = track.title;
+            f.Tag.Album = bookTitle;
+            if (f.Tag.Performers == null || f.Tag.Performers.Length == 0)
+              f.Tag.Performers = new[] { author };
+            else if (f.Tag.Performers[0] != author)
+              f.Tag.Performers = new[] { author }.Union(f.Tag.Performers).ToArray();
+            if (f.Tag.AlbumArtists == null || f.Tag.AlbumArtists.Length == 0)
+              f.Tag.AlbumArtists = new[] { author };
+            else if (f.Tag.AlbumArtists[0] != author)
+              f.Tag.AlbumArtists = new[] { author }.Union(f.Tag.AlbumArtists).ToArray();
 
-                var comment = $"saved by bookGrabber from {url}";
-                if (string.IsNullOrWhiteSpace(f.Tag.Comment))
-                  f.Tag.Comment = comment;
-                else 
-                  f.Tag.Comment += "\n" + comment;
+            var comment = $"saved by bookGrabber from {url}";
+            if (string.IsNullOrWhiteSpace(f.Tag.Comment))
+              f.Tag.Comment = comment;
+            else 
+              f.Tag.Comment += "\n" + comment;
 
-                if (bookImage != null && bookImage.Type != PictureType.NotAPicture)
-                  f.Tag.Pictures = new IPicture[1] { bookImage };
+            if (bookImage != null && bookImage.Type != PictureType.NotAPicture)
+              f.Tag.Pictures = new IPicture[1] { bookImage };
 
-                f.Save();
+            f.Save();
 
-                Interlocked.Increment(ref done);
-              }
-              catch (Exception ex) {
-                Interlocked.Increment(ref failed);
-                errors[track.url] = ex;
-                System.IO.File.Delete(outputPath);
-              }
-              finally {
-                ShowProgress(tracks.Length, done, failed, title);
-                if (failed > 0)
-                  TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Error);
-                TaskbarProgressHelper.SetValue(done, tracks.Length);
-              }
-#if !DEBUG              
-            }).ToArray();
-        await Task.WhenAll(tasks);
-#else
-        }
-#endif        
+            Interlocked.Increment(ref done);
+          }
+          catch (Exception ex) {
+            Interlocked.Increment(ref failed);
+            errors[track.url] = ex;
+            System.IO.File.Delete(outputPath);
+          }
+          finally {
+            semaphore.Release();
+            ShowProgress(tracks.Length, done, failed, title);
+            if (failed > 0)
+              TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Error);
+            TaskbarProgressHelper.SetValue(done, tracks.Length);
+          }
+        }).ToArray());
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.NoProgress);
 
         SafeSetCursorPosition(0, consoleTop + 3);
