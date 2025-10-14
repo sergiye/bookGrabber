@@ -31,11 +31,14 @@ namespace bookGrabber {
       }
       
       var subDir = args.Length < 2 ? null : args[1];
+      
+      if (args.Length < 3 || !int.TryParse(args[2], out var maxDownloadThreads))
+        maxDownloadThreads = Environment.ProcessorCount;
 
-      await DownloadBook(url, subDir, true);
+      await DownloadBook(url, maxDownloadThreads, subDir, true);
     }
 
-    static async Task DownloadBook(string url, string subDir = null, bool isFirstBook = false) {
+    static async Task DownloadBook(string url, int maxDownloadThreads, string subDir = null, bool isFirstBook = false) {
 
       var errors = new Dictionary<string, Exception>();
       var nextBookUrl = string.Empty;
@@ -157,7 +160,6 @@ namespace bookGrabber {
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Normal);
         TaskbarProgressHelper.SetValue(done, tracks.Length);
 
-        var maxDownloadThreads = Environment.ProcessorCount;
         var semaphore = new SemaphoreSlim(maxDownloadThreads, maxDownloadThreads);
         await Task.WhenAll(Enumerable.Range(0, tracks.Length).Select(async (i) => {
           await semaphore.WaitAsync();
@@ -253,7 +255,7 @@ namespace bookGrabber {
         Console.ReadLine();
       }
       else if (!string.IsNullOrEmpty(nextBookUrl)) {
-        await DownloadBook(nextBookUrl);
+        await DownloadBook(nextBookUrl, maxDownloadThreads);
       }
     }
 
