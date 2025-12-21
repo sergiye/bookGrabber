@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -16,6 +17,8 @@ namespace bookGrabber {
 
     private static readonly object gate = new object();
     private static int consoleTop;
+    private static HttpClient httpClient;
+    private const int BufferSize = 80 * 1024; //80KB
 
     static async Task Main(string[] args) {
 
@@ -23,6 +26,18 @@ namespace bookGrabber {
       ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
       ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
 
+      httpClient = new HttpClient(new HttpClientHandler {
+        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+        AllowAutoRedirect = true,
+      }) {
+        Timeout = TimeSpan.FromMinutes(5), 
+      };
+      httpClient.DefaultRequestHeaders.Referrer = new Uri("https://knigavuhe.org/");
+      httpClient.DefaultRequestHeaders.Accept.Clear();
+      httpClient.DefaultRequestHeaders.Accept.Add(
+        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+      );
+      
       var url = args.Length < 1 ? null : args[0];
 
       if (string.IsNullOrEmpty(url)) {
@@ -64,7 +79,7 @@ namespace bookGrabber {
         var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s+<span class=""book_serie_block_item_index"">(\d+)\.<\/span>(\s+<a href=""([^""]+)"">)?");
         if (sequences.Count > 0) {
           for(var i = 0; i < sequences.Count; i++) {
-            if (sequences[i].Groups[3].Success != false) continue;
+            if (sequences[i].Groups[3].Success) continue;
             if (int.TryParse(sequences[i].Groups[1].Value, out var number))
               sequenceNumber = number;
 
@@ -104,8 +119,7 @@ namespace bookGrabber {
           var bookImgUrl = matches[0].Groups[1].Value;
           Write("Retrieving book image... ");
           var bookImageFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
-          using (var wc = new WebClient())
-            await wc.DownloadFileTaskAsync(bookImgUrl, bookImageFilePath);
+          await DownloadFile(bookImgUrl, bookImageFilePath);
           bookImage = new Picture(bookImageFilePath);
           System.IO.File.Delete(bookImageFilePath);
           WriteLine("\tDone!", ConsoleColor.Green);
@@ -292,42 +306,60 @@ namespace bookGrabber {
       }
     }
 
-    private static async Task<string> GetContent(string uri) {
-      using (var wc = new WebClient()) {
-        //wc.Headers.Add("user-agent", "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.500.27 Safari/537.36");
-        wc.Headers.Add("content-type", "application/json; charset=utf-8");
-        wc.Headers.Add("referer", "https://knigavuhe.org/");
-        return await wc.DownloadStringTaskAsync(uri).ConfigureAwait(false);
+    private static async Task<string> GetContent(string uri, CancellationToken token = default) {
+      using (var response = await httpClient.GetAsync(uri, token)) {
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
       }
     }
 
-    private static async Task DownloadFile(string url, string outputPath, int retries = 3) {
+    private static async Task DownloadFile(string url, string outputPath, int maxRetries = 1, CancellationToken cancellationToken = default) {
+      for (var attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          using (var response = await httpClient.GetAsync(url,
+                   HttpCompletionOption.ResponseHeadersRead,
+                   cancellationToken)) {
+            if (!response.IsSuccessStatusCode) {
+              if (IsRetryableStatusCode(response.StatusCode) && attempt < maxRetries) {
+                await DelayBeforeRetry(attempt, cancellationToken);
+                continue;
+              }
+              response.EnsureSuccessStatusCode();
+            }
+            using (var input = await response.Content.ReadAsStreamAsync())
+            using (var output = new FileStream(outputPath,
+                     FileMode.Create, FileAccess.Write, FileShare.None,
+                     BufferSize, useAsync: true)) {
+              await input.CopyToAsync(output, BufferSize, cancellationToken);
+            }
+          }
+          return;
+        }
+        catch (TaskCanceledException ex) {
+          if (cancellationToken.IsCancellationRequested)
+            throw;
+          if (attempt >= maxRetries) throw new TimeoutException("HTTP request timed out.", ex);
+          await DelayBeforeRetry(attempt, cancellationToken);
+        }
+        catch (HttpRequestException) {
+          if (attempt >= maxRetries) throw;
+          await DelayBeforeRetry(attempt, cancellationToken);
+        }
+      }
+    }
 
-      // var tryNum = 1;
-      // while (tryNum < retries) {
-      //     try {
-      using (var wc = new WebClient())
-        await wc.DownloadFileTaskAsync(url, outputPath);
-      //     }
-      //     catch (Exception ex) {
-      //         if (ex is WebException webEx && webEx.Response is HttpWebResponse response) {
-      //             switch ((WebExceptionStatus) response.StatusCode) {
-      //                 case WebExceptionStatus.ConnectFailure:
-      //                 case WebExceptionStatus.ReceiveFailure:
-      //                 case WebExceptionStatus.RequestCanceled:
-      //                 case WebExceptionStatus.ProtocolError:
-      //                 case WebExceptionStatus.ConnectionClosed:
-      //                 case WebExceptionStatus.KeepAliveFailure:
-      //                 case WebExceptionStatus.Pending:
-      //                 case WebExceptionStatus.Timeout:
-      //                 case WebExceptionStatus.ProxyNameResolutionFailure:
-      //                     tryNum++;
-      //                     continue;
-      //             }
-      //         }
-      //         throw;
-      //     }
-      // }
+    private static Task DelayBeforeRetry(int attempt, CancellationToken token) {
+      var delay = TimeSpan.FromSeconds(Math.Min(2 * attempt, 10));
+      return Task.Delay(delay, token);
+    }
+
+    private static bool IsRetryableStatusCode(HttpStatusCode statusCode) {
+      var code = (int) statusCode;
+      return
+        statusCode == HttpStatusCode.RequestTimeout
+        || code == 429 //too many requests 
+        || code >= 500 //all server errors
+        ;
     }
 
     private static string GetValidFileName(string fileName, bool allowEmpty) {
