@@ -38,7 +38,7 @@ namespace bookGrabber {
       await DownloadBook(url, maxDownloadThreads, subDir, true);
     }
 
-    static async Task DownloadBook(string url, int maxDownloadThreads, string subDir = null, bool isFirstBook = false) {
+    private static async Task DownloadBook(string url, int maxDownloadThreads, string subDir = null, bool isFirstBook = false) {
 
       var errors = new Dictionary<string, Exception>();
       var nextBookUrl = string.Empty;
@@ -49,7 +49,7 @@ namespace bookGrabber {
 
         Write("Retrieving book content... ");
         var content = (await GetContent(url)).TrimEnd();
-        WriteLine($"\tDone!", ConsoleColor.Green);
+        WriteLine("\tDone!", ConsoleColor.Green);
 
         var author = string.Empty;
         var bookTitle = string.Empty;
@@ -64,25 +64,24 @@ namespace bookGrabber {
         var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s+<span class=""book_serie_block_item_index"">(\d+)\.<\/span>(\s+<a href=""([^""]+)"">)?");
         if (sequences.Count > 0) {
           for(var i = 0; i < sequences.Count; i++) {
-            if (sequences[i].Groups[3].Success == false) {
-              if (int.TryParse(sequences[i].Groups[1].Value, out var number))
-                sequenceNumber = number;
+            if (sequences[i].Groups[3].Success != false) continue;
+            if (int.TryParse(sequences[i].Groups[1].Value, out var number))
+              sequenceNumber = number;
 
-              if (sequences.Count > i + 1) {
-                nextBookUrl = sequences[i+1].Groups[3].Value;
-                if (!string.IsNullOrEmpty(nextBookUrl)) {
-                  if (!nextBookUrl.StartsWith("http")) {
-                    nextBookUrl = "https://knigavuhe.org" + nextBookUrl;
-                  }
-                  if (isFirstBook) {
-                    WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
-                    if (Console.ReadKey().Key == ConsoleKey.Escape)
-                      nextBookUrl = null;
-                  }
+            if (sequences.Count > i + 1) {
+              nextBookUrl = sequences[i+1].Groups[3].Value;
+              if (!string.IsNullOrEmpty(nextBookUrl)) {
+                if (!nextBookUrl.StartsWith("http")) {
+                  nextBookUrl = "https://knigavuhe.org" + nextBookUrl;
+                }
+                if (isFirstBook) {
+                  WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
+                  if (Console.ReadKey().Key == ConsoleKey.Escape)
+                    nextBookUrl = null;
                 }
               }
-              break;
             }
+            break;
           }
         }
 
@@ -109,7 +108,7 @@ namespace bookGrabber {
             await wc.DownloadFileTaskAsync(bookImgUrl, bookImageFilePath);
           bookImage = new Picture(bookImageFilePath);
           System.IO.File.Delete(bookImageFilePath);
-          WriteLine($"\tDone!", ConsoleColor.Green);
+          WriteLine("\tDone!", ConsoleColor.Green);
         }
 
         if (!isFirstBook) {
@@ -161,7 +160,7 @@ namespace bookGrabber {
         TaskbarProgressHelper.SetValue(done, tracks.Length);
 
         var semaphore = new SemaphoreSlim(maxDownloadThreads, maxDownloadThreads);
-        await Task.WhenAll(Enumerable.Range(0, tracks.Length).Select(async (i) => {
+        await Task.WhenAll(Enumerable.Range(0, tracks.Length).Select(async i => {
           await semaphore.WaitAsync();
 
           var track = tracks[i];
@@ -214,7 +213,7 @@ namespace bookGrabber {
               f.Tag.Comment += "\n" + comment;
 
             if (bookImage != null && bookImage.Type != PictureType.NotAPicture)
-              f.Tag.Pictures = new IPicture[1] { bookImage };
+              f.Tag.Pictures = new IPicture[] { bookImage };
 
             f.Save();
 
@@ -246,13 +245,14 @@ namespace bookGrabber {
       SafeSetCursorPosition(0, consoleTop + 5);
 
       if (errors.Count > 0) {
-        WriteLine($"Errors summary:");
+        WriteLine("Errors summary:");
         foreach (var p in errors) {
           Write($" - Error loading {p.Key}: ", ConsoleColor.Red);
           WriteLine($"{p.Value.Message}", ConsoleColor.Yellow);
         }
-        WriteLine("Press 'Enter' to exit...");
-        Console.ReadLine();
+        WriteLine("Press any key to retry download or 'Esc' to exit...");
+        if (Console.ReadKey().Key != ConsoleKey.Escape)
+          await DownloadBook(url, maxDownloadThreads, subDir, isFirstBook);
       }
       else if (!string.IsNullOrEmpty(nextBookUrl)) {
         await DownloadBook(nextBookUrl, maxDownloadThreads);
@@ -267,7 +267,7 @@ namespace bookGrabber {
         Write(" tracks, done: ", ConsoleColor.White);
         Write($"{done}", ConsoleColor.Green);
         if (failed > 0) {
-          Write($", failed: ", ConsoleColor.White);
+          Write(", failed: ", ConsoleColor.White);
           Write($"{failed}", ConsoleColor.Red);
         }
         Write(", completed: ", ConsoleColor.White);
@@ -277,7 +277,7 @@ namespace bookGrabber {
       }
     }
 
-    public static void SafeSetCursorPosition(int x, int y) {
+    private static void SafeSetCursorPosition(int x, int y) {
       try {
         var maxX = Math.Max(0, Console.BufferWidth - 1);
         var maxY = Math.Max(0, Console.BufferHeight - 1);
@@ -331,11 +331,9 @@ namespace bookGrabber {
     }
 
     private static string GetValidFileName(string fileName, bool allowEmpty) {
-      if (string.IsNullOrWhiteSpace(fileName) && !allowEmpty)
-        throw new ArgumentException("File name can not be empty.");
-      foreach (var c in Path.GetInvalidFileNameChars()) {
-        fileName = fileName.Replace(c, ' ').Trim();
-      }
+      if (string.IsNullOrWhiteSpace(fileName))
+        return allowEmpty ? fileName : throw new ArgumentException("File name can not be empty.");
+      fileName = Path.GetInvalidFileNameChars().Aggregate(fileName, (current, c) => current.Replace(c, ' ').Trim());
       return fileName.TrimEnd('.');
     }
 
