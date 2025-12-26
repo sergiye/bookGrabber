@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -17,8 +16,6 @@ namespace bookGrabber {
 
     private static readonly object gate = new object();
     private static int consoleTop;
-    private static HttpClient httpClient;
-    private const int BufferSize = 80 * 1024; //80KB
 
     static async Task Main(string[] args) {
 
@@ -26,22 +23,10 @@ namespace bookGrabber {
       ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
       ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
 
-      httpClient = new HttpClient(new HttpClientHandler {
-        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-        AllowAutoRedirect = true,
-      }) {
-        Timeout = TimeSpan.FromMinutes(5), 
-      };
-      httpClient.DefaultRequestHeaders.Referrer = new Uri("https://knigavuhe.org/");
-      httpClient.DefaultRequestHeaders.Accept.Clear();
-      httpClient.DefaultRequestHeaders.Accept.Add(
-        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
-      );
-      
       var url = args.Length < 1 ? null : args[0];
 
       if (string.IsNullOrEmpty(url)) {
-        Write("Enter book or book sequence url: ");
+        Utils.Write("Enter book or book sequence url: ");
         url = Console.ReadLine();
       }
       
@@ -62,9 +47,9 @@ namespace bookGrabber {
         if (string.IsNullOrWhiteSpace(url))
           throw new Exception("Book url can not be empty");
 
-        Write("Retrieving book content... ");
-        var content = (await GetContent(url)).TrimEnd();
-        WriteLine("\tDone!", ConsoleColor.Green);
+        Utils.Write("Retrieving book content... ");
+        var content = (await Utils.GetContent(url)).TrimEnd();
+        Utils.WriteLine("\tDone!", ConsoleColor.Green);
 
         var author = string.Empty;
         var bookTitle = string.Empty;
@@ -90,7 +75,7 @@ namespace bookGrabber {
                   nextBookUrl = "https://knigavuhe.org" + nextBookUrl;
                 }
                 if (isFirstBook) {
-                  WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
+                  Utils.WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
                   if (Console.ReadKey().Key == ConsoleKey.Escape)
                     nextBookUrl = null;
                 }
@@ -102,8 +87,8 @@ namespace bookGrabber {
 
         var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^""]+) - ([^>]+)"">");
         if (matches.Count != 0 && matches[0].Groups.Count > 1) {
-          author = GetValidFileName(matches[0].Groups[1].Value, true);
-          bookTitle = GetValidFileName(matches[0].Groups[2].Value, true);
+          author = Utils.GetValidFileName(matches[0].Groups[1].Value, true);
+          bookTitle = Utils.GetValidFileName(matches[0].Groups[2].Value, true);
           if (!string.IsNullOrEmpty(sequenceName))
             title = sequenceNumber > 0 ? $"{author} - {sequenceName} - {sequenceNumber}. {bookTitle}" : $"{author} - {bookTitle}";
           else if (sequenceNumber > 0)
@@ -117,23 +102,23 @@ namespace bookGrabber {
         matches = Regex.Matches(content, @"<meta property=""og:image"" content=""([^>]+)"">");
         if (matches.Count != 0 && matches[0].Groups.Count > 1) {
           var bookImgUrl = matches[0].Groups[1].Value;
-          Write("Retrieving book image... ");
+          Utils.Write("Retrieving book image... ");
           var bookImageFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
-          await DownloadFile(bookImgUrl, bookImageFilePath);
+          await Utils.DownloadFile(bookImgUrl, bookImageFilePath);
           bookImage = new Picture(bookImageFilePath);
           System.IO.File.Delete(bookImageFilePath);
-          WriteLine("\tDone!", ConsoleColor.Green);
+          Utils.WriteLine("\tDone!", ConsoleColor.Green);
         }
 
         if (!isFirstBook) {
-          subDir = GetValidFileName(title, true);
+          subDir = Utils.GetValidFileName(title, true);
         }
         if (string.IsNullOrEmpty(subDir)) {
-          Write("Press 'Enter' to use '");
-          Write($"{title}", ConsoleColor.Yellow);
-          Write("' as subdir, or enter new one: ");
+          Utils.Write("Press 'Enter' to use '");
+          Utils.Write($"{title}", ConsoleColor.Yellow);
+          Utils.Write("' as subdir, or enter new one: ");
           var value = Console.ReadLine();
-          subDir = string.IsNullOrWhiteSpace(value) ? title : GetValidFileName(value, true);
+          subDir = string.IsNullOrWhiteSpace(value) ? title : Utils.GetValidFileName(value, true);
         }
 
         // var useTitle = args.Length > 2 && args[2] == "/t";
@@ -161,8 +146,9 @@ namespace bookGrabber {
           outPath = Path.Combine(outPath, subDir);
           Directory.CreateDirectory(outPath);
         }
-        Write("Target folder: ");
-        WriteLine(outPath, ConsoleColor.DarkCyan);
+
+        Utils.Write("Target folder: ");
+        Utils.WriteLine(outPath, ConsoleColor.DarkCyan);
 
         Console.CursorVisible = false;
         consoleTop = Console.CursorTop;
@@ -202,7 +188,7 @@ namespace bookGrabber {
               return;
             }
 
-            await DownloadFile(track.url, outputPath);
+            await Utils.DownloadFile(track.url, outputPath);
 
             var f = TagLib.File.Create(outputPath);
             //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
@@ -248,23 +234,24 @@ namespace bookGrabber {
         }).ToArray());
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.NoProgress);
 
-        SafeSetCursorPosition(0, consoleTop + 3);
-        WriteLine("Finished", ConsoleColor.DarkCyan);
+        Utils.SafeSetCursorPosition(0, consoleTop + 3);
+        Utils.WriteLine("Finished", ConsoleColor.DarkCyan);
       }
       catch (Exception ex) {
         errors["internal"] = ex;
       }
 
       Console.CursorVisible = true;
-      SafeSetCursorPosition(0, consoleTop + 5);
+      Utils.SafeSetCursorPosition(0, consoleTop + 5);
 
       if (errors.Count > 0) {
-        WriteLine("Errors summary:");
+        Utils.WriteLine("Errors summary:");
         foreach (var p in errors) {
-          Write($" - Error loading {p.Key}: ", ConsoleColor.Red);
-          WriteLine($"{p.Value.Message}", ConsoleColor.Yellow);
+          Utils.Write($" - Error loading {p.Key}: ", ConsoleColor.Red);
+          Utils.WriteLine($"{p.Value.Message}", ConsoleColor.Yellow);
         }
-        WriteLine("Press any key to retry download or 'Esc' to exit...");
+
+        Utils.WriteLine("Press any key to retry download or 'Esc' to exit...");
         if (Console.ReadKey().Key != ConsoleKey.Escape)
           await DownloadBook(url, maxDownloadThreads, subDir, isFirstBook);
       }
@@ -275,114 +262,21 @@ namespace bookGrabber {
 
     private static void ShowProgress(int count, int done, int failed, string title) {
       lock (gate) {
-        SafeSetCursorPosition(0, consoleTop + 1);
-        Write("Downloading ", ConsoleColor.White);
-        Write($"{count}", ConsoleColor.Cyan);
-        Write(" tracks, done: ", ConsoleColor.White);
-        Write($"{done}", ConsoleColor.Green);
+        Utils.SafeSetCursorPosition(0, consoleTop + 1);
+        Utils.Write("Downloading ", ConsoleColor.White);
+        Utils.Write($"{count}", ConsoleColor.Cyan);
+        Utils.Write(" tracks, done: ", ConsoleColor.White);
+        Utils.Write($"{done}", ConsoleColor.Green);
         if (failed > 0) {
-          Write(", failed: ", ConsoleColor.White);
-          Write($"{failed}", ConsoleColor.Red);
+          Utils.Write(", failed: ", ConsoleColor.White);
+          Utils.Write($"{failed}", ConsoleColor.Red);
         }
-        Write(", completed: ", ConsoleColor.White);
+
+        Utils.Write(", completed: ", ConsoleColor.White);
         var percents = (done + failed) * 100 / count;
-        Write($"{percents}%", ConsoleColor.Yellow);
+        Utils.Write($"{percents}%", ConsoleColor.Yellow);
         Console.Title = $"{percents}% {title}";
       }
-    }
-
-    private static void SafeSetCursorPosition(int x, int y) {
-      try {
-        var maxX = Math.Max(0, Console.BufferWidth - 1);
-        var maxY = Math.Max(0, Console.BufferHeight - 1);
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
-        if (x > maxX) x = maxX;
-        if (y > maxY) y = maxY;
-        Console.SetCursorPosition(x, y);
-      }
-      catch (ArgumentOutOfRangeException) {
-        Console.SetCursorPosition(0, Math.Max(0, Console.BufferHeight - 1));
-      }
-    }
-
-    private static async Task<string> GetContent(string uri, CancellationToken token = default) {
-      using (var response = await httpClient.GetAsync(uri, token)) {
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsStringAsync();
-      }
-    }
-
-    private static async Task DownloadFile(string url, string outputPath, int maxRetries = 1, CancellationToken cancellationToken = default) {
-      for (var attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          using (var response = await httpClient.GetAsync(url,
-                   HttpCompletionOption.ResponseHeadersRead,
-                   cancellationToken)) {
-            if (!response.IsSuccessStatusCode) {
-              if (IsRetryableStatusCode(response.StatusCode) && attempt < maxRetries) {
-                await DelayBeforeRetry(attempt, cancellationToken);
-                continue;
-              }
-              response.EnsureSuccessStatusCode();
-            }
-            using (var input = await response.Content.ReadAsStreamAsync())
-            using (var output = new FileStream(outputPath,
-                     FileMode.Create, FileAccess.Write, FileShare.None,
-                     BufferSize, useAsync: true)) {
-              await input.CopyToAsync(output, BufferSize, cancellationToken);
-            }
-          }
-          return;
-        }
-        catch (TaskCanceledException ex) {
-          if (cancellationToken.IsCancellationRequested)
-            throw;
-          if (attempt >= maxRetries) throw new TimeoutException("HTTP request timed out.", ex);
-          await DelayBeforeRetry(attempt, cancellationToken);
-        }
-        catch (HttpRequestException) {
-          if (attempt >= maxRetries) throw;
-          await DelayBeforeRetry(attempt, cancellationToken);
-        }
-      }
-    }
-
-    private static Task DelayBeforeRetry(int attempt, CancellationToken token) {
-      var delay = TimeSpan.FromSeconds(Math.Min(2 * attempt, 10));
-      return Task.Delay(delay, token);
-    }
-
-    private static bool IsRetryableStatusCode(HttpStatusCode statusCode) {
-      var code = (int) statusCode;
-      return
-        statusCode == HttpStatusCode.RequestTimeout
-        || code == 429 //too many requests 
-        || code >= 500 //all server errors
-        ;
-    }
-
-    private static string GetValidFileName(string fileName, bool allowEmpty) {
-      if (string.IsNullOrWhiteSpace(fileName))
-        return allowEmpty ? fileName : throw new ArgumentException("File name can not be empty.");
-      fileName = Path.GetInvalidFileNameChars().Aggregate(fileName, (current, c) => current.Replace(c, ' ').Trim());
-      return fileName.TrimEnd('.');
-    }
-
-    private static void WriteLine(string message = null, ConsoleColor? color = null, ConsoleColor? backColor = null) {
-      Write(message, color, backColor, true);
-    }
-
-    private static void Write(string message = null, ConsoleColor? color = null, ConsoleColor? backColor = null, bool newLine = false) {
-      if (backColor.HasValue)
-        Console.BackgroundColor = backColor.Value;
-      if (color.HasValue)
-        Console.ForegroundColor = color.Value;
-      if (newLine)
-        Console.WriteLine(message);
-      else
-        Console.Write(message);
-      Console.ResetColor();
     }
   }
 }
