@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,7 +11,7 @@ namespace bookGrabber {
   
   internal static class Utils {
     
-    private static HttpClient httpClient;
+    private static readonly HttpClient httpClient;
     private const int BufferSize = 80 * 1024; //80KB
 
     static Utils() {
@@ -88,6 +89,26 @@ namespace bookGrabber {
         return allowEmpty ? fileName : throw new ArgumentException("File name can not be empty.");
       fileName = Path.GetInvalidFileNameChars().Aggregate(fileName, (current, c) => current.Replace(c, ' ').Trim());
       return fileName.TrimEnd('.');
+    }
+
+    public static string NormalizeSpaces(this string input) {
+      if (string.IsNullOrEmpty(input))
+        return input;
+      var sb = new StringBuilder(input.Length);
+      bool previousIsSpace = false;
+      foreach (char c in input) {
+        if (c == ' ') {
+          if (!previousIsSpace) {
+            sb.Append(c);
+            previousIsSpace = true;
+          }
+        }
+        else {
+          sb.Append(c);
+          previousIsSpace = false;
+        }
+      }
+      return sb.ToString();
     }
 
     public static void SafeSetCursorPosition(int x, int y) {

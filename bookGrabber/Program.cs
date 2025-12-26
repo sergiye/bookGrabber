@@ -16,6 +16,7 @@ namespace bookGrabber {
 
     private static readonly object gate = new object();
     private static int consoleTop;
+    private static string subDirTemplate = "%f %s %n - %t";
 
     static async Task Main(string[] args) {
 
@@ -38,7 +39,28 @@ namespace bookGrabber {
       await DownloadBook(url, maxDownloadThreads, subDir, true);
     }
 
-    private static async Task DownloadBook(string url, int maxDownloadThreads, string subDir = null, bool isFirstBook = false) {
+    /// <summary>
+    /// %f - full author name <br/>
+    /// %s - sequence name <br/>
+    /// %n - sequence number <br/>
+    /// %t - title <br/>
+    /// </summary>
+    /// <param name="author"></param>
+    /// <param name="sequenceName"></param>
+    /// <param name="sequenceNumber"></param>
+    /// <param name="bookTitle"></param>
+    /// <returns></returns>
+    private static string GetTitle(string author, string sequenceName, int sequenceNumber, string bookTitle) {
+      var title = subDirTemplate
+        .Replace("%f", author)
+        .Replace("%t", bookTitle)
+        .Replace("%s", string.IsNullOrEmpty(sequenceName) ? "" : sequenceName)
+        .Replace("%n", sequenceNumber > 0 ? sequenceNumber.ToString() : "")
+        .NormalizeSpaces();
+      return title;
+    }
+    
+    private static async Task DownloadBook(string url, int maxDownloadThreads, string subDir, bool isFirstBook) {
 
       var errors = new Dictionary<string, Exception>();
       var nextBookUrl = string.Empty;
@@ -89,12 +111,7 @@ namespace bookGrabber {
         if (matches.Count != 0 && matches[0].Groups.Count > 1) {
           author = Utils.GetValidFileName(matches[0].Groups[1].Value, true);
           bookTitle = Utils.GetValidFileName(matches[0].Groups[2].Value, true);
-          if (!string.IsNullOrEmpty(sequenceName))
-            title = sequenceNumber > 0 ? $"{author} - {sequenceName} - {sequenceNumber}. {bookTitle}" : $"{author} - {bookTitle}";
-          else if (sequenceNumber > 0)
-            title = $"{author} - {sequenceNumber}. {bookTitle}";
-          else
-            title = $"{author} - {bookTitle}";
+          title = GetTitle(author, sequenceName, sequenceNumber, bookTitle);
           Console.Title = title;
         }
 
@@ -118,18 +135,18 @@ namespace bookGrabber {
           Utils.Write($"{title}", ConsoleColor.Yellow);
           Utils.Write("' as subdir, or enter new one: ");
           var value = Console.ReadLine();
-          subDir = string.IsNullOrWhiteSpace(value) ? title : Utils.GetValidFileName(value, true);
+          if (string.IsNullOrWhiteSpace(value)) {
+            subDir = title;
+          }
+          else {
+            if (value.Contains("%f") || value.Contains("%s") || value.Contains("%n") || value.Contains("%t")) {
+              subDirTemplate = value;
+              value = title = GetTitle(author, sequenceName, sequenceNumber, bookTitle);
+            }
+            subDir = Utils.GetValidFileName(value, true);
+          }
         }
-
-        // var useTitle = args.Length > 2 && args[2] == "/t";
-        // var useUri = args.Length > 2 && args[2] == "/u";
-        // if (args.Length == 0) {
-        //     Write("Get file names from: 't' (title), 'u' (url), or 'n' (number, by default): ");
-        //     var value = Console.ReadLine();
-        //     useUri = value == "u";
-        //     useTitle = value == "t";
-        // }
-
+        
         var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
         if (coll.Count == 0 || coll[0].Groups.Count < 2)
           throw new Exception("No tracks found");
@@ -141,7 +158,7 @@ namespace bookGrabber {
           throw new Exception("Error getting list of tracks");
 
         var asm = Assembly.GetExecutingAssembly();
-        var outPath = Path.GetDirectoryName(asm.Location);
+        var outPath = Path.GetDirectoryName(asm.Location) ?? throw new Exception("Invalid assembly location.");
         if (!string.IsNullOrEmpty(subDir)) {
           outPath = Path.Combine(outPath, subDir);
           Directory.CreateDirectory(outPath);
@@ -256,7 +273,7 @@ namespace bookGrabber {
           await DownloadBook(url, maxDownloadThreads, subDir, isFirstBook);
       }
       else if (!string.IsNullOrEmpty(nextBookUrl)) {
-        await DownloadBook(nextBookUrl, maxDownloadThreads);
+        await DownloadBook(nextBookUrl, maxDownloadThreads, null, false);
       }
     }
 
