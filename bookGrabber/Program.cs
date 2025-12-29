@@ -50,12 +50,12 @@ namespace bookGrabber {
     /// <param name="sequenceNumber"></param>
     /// <param name="bookTitle"></param>
     /// <returns></returns>
-    private static string GetTitle(string author, string sequenceName, int sequenceNumber, string bookTitle) {
+    private static string GetTitle(string author, string sequenceName, string sequenceNumber, string bookTitle) {
       var title = subDirTemplate
         .Replace("%f", author)
         .Replace("%t", bookTitle)
         .Replace("%s", string.IsNullOrEmpty(sequenceName) ? "" : sequenceName)
-        .Replace("%n", sequenceNumber > 0 ? sequenceNumber.ToString() : "")
+        .Replace("%n", string.IsNullOrEmpty(sequenceNumber) ? "" : sequenceNumber)
         .NormalizeSpaces();
       return title;
     }
@@ -76,19 +76,18 @@ namespace bookGrabber {
         var author = string.Empty;
         var bookTitle = string.Empty;
         var title = string.Empty;
-        var sequenceNumber = 0;
+        var sequenceNumber = string.Empty;
         var sequenceName = string.Empty;
 
         var sequenceNameMatch = Regex.Match(content, @"<div class=""book_serie_block_title"">\s+.+>([^>]+)<\/a>");
         if (sequenceNameMatch.Success) {
           sequenceName = sequenceNameMatch.Groups[1].Value;
         }
-        var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s+<span class=""book_serie_block_item_index"">(\d+)\.<\/span>(\s+<a href=""([^""]+)"">)?");
+        var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s+<span class=""book_serie_block_item_index"">(\d+\.?\d*)\.<\/span>(\s+<a href=""([^""]+)"">)?");
         if (sequences.Count > 0) {
           for(var i = 0; i < sequences.Count; i++) {
             if (sequences[i].Groups[3].Success) continue;
-            if (int.TryParse(sequences[i].Groups[1].Value, out var number))
-              sequenceNumber = number;
+            sequenceNumber = sequences[i].Groups[1].Value;
 
             if (sequences.Count > i + 1) {
               nextBookUrl = sequences[i+1].Groups[3].Value;
