@@ -83,11 +83,14 @@ namespace bookGrabber {
         if (sequenceNameMatch.Success) {
           sequenceName = sequenceNameMatch.Groups[1].Value;
         }
-        var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s+<span class=""book_serie_block_item_index"">(\d+\.?\d*)\.<\/span>(\s+<a href=""([^""]+)"">)?");
+        var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s*(<span.+)?(\s*<a href=""([^""]+)"">)?");
         if (sequences.Count > 0) {
           for(var i = 0; i < sequences.Count; i++) {
             if (sequences[i].Groups[3].Success) continue;
-            sequenceNumber = sequences[i].Groups[1].Value;
+            var sequenceNumberMatch = Regex.Match(sequences[i].Groups[1].Value, @"<span class=""book_serie_block_item_index"">(\d+\.?\d*)\.<\/span>?");
+            if (sequenceNumberMatch.Groups[1].Success) {
+              sequenceNumber = sequenceNumberMatch.Groups[1].Value;
+            }
 
             if (sequences.Count > i + 1) {
               nextBookUrl = sequences[i+1].Groups[3].Value;
