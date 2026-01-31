@@ -7,9 +7,16 @@ bookGrabber - utility for obtaining audiobook files from the site [`Книга �
 
 ## Features
 
-- usage: `bookGrabber.exe [bookPageUrl] [targetSubDir]`
+- usage: `bookGrabber.exe [bookPageUrl] [targetSubDir] [maxDownloadThreads]`
 - when launched without parameters, `url` and `subDir` (the name of the folder where to download) can be entered manually
 - no installation required, all in 1 executable file
+- destination directory name templates supported (default template is: %f %s %n - %t):
+	* %f - full author name
+	* %s - sequence name
+	* %n - sequence number
+	* %t - book title
+- if the process finishes successfully, the application will close automatically
+- in case of an error, the error details will be displayed and the user will be prompted to retry the operation
 
 ## What does it look like?
 
