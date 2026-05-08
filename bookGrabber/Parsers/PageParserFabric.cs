@@ -10,6 +10,7 @@ namespace bookGrabber {
     private static readonly Dictionary<string, Type> parsers = new() {
       {KnigavuheParser.BaseUrl, typeof(KnigavuheParser)},
       {AudioBookMp3Parser.BaseUrl, typeof(AudioBookMp3Parser)},
+      {BooksAudioOnlineParser.BaseUrl, typeof(BooksAudioOnlineParser)},
     };
 
     public static async Task<PageParser> Create(string url) {

@@ -7,6 +7,7 @@ bookGrabber — command-line utility for downloading audiobooks from supported o
 supported sources:
 * https://knigavuhe.org
 * https://audiobook-mp3.com
+* https://booksaudio-online.com
 
 ## Features
 
