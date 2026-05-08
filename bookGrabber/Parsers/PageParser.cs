@@ -1,5 +1,4 @@
 ﻿using System.Threading.Tasks;
-using TagLib;
 
 namespace bookGrabber {
 
@@ -12,7 +11,7 @@ namespace bookGrabber {
     public string Author { get; protected set; }
     public string BookTitle { get; protected set; }
     public string Title { get; set; }
-    public Picture BookImage { get; protected set; }
+    public string BookImgUrl { get; protected set; }
     public TrackInfo[] Tracks { get; protected set; }
 
     /// <summary>

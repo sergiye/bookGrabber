@@ -1,10 +1,8 @@
 ﻿using System;
-using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using sergiye.Common;
-using TagLib;
 
 namespace bookGrabber {
 
@@ -32,15 +30,7 @@ namespace bookGrabber {
         Title = GetTitle(Author, SequenceName, SequenceNumber, BookTitle);
       }
 
-      var bookImgUrl = ExtractBookImageUrl(content);
-      if (!string.IsNullOrEmpty(bookImgUrl)) {
-        Utils.Write("Retrieving book image... ");
-        var bookImageFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
-        await Utils.DownloadFile(bookImgUrl, bookImageFilePath);
-        BookImage = new Picture(bookImageFilePath);
-        System.IO.File.Delete(bookImageFilePath);
-        Utils.WriteLine("\tDone!", ConsoleColor.Green);
-      }
+      BookImgUrl = ExtractBookImageUrl(content);
 
       var playlistUrl = ExtractPlaylistUrl(content);
       if (string.IsNullOrEmpty(playlistUrl)) {

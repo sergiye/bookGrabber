@@ -1,9 +1,7 @@
 ﻿using System;
-using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using sergiye.Common;
-using TagLib;
 
 namespace bookGrabber {
 
@@ -55,13 +53,7 @@ namespace bookGrabber {
 
       matches = Regex.Matches(content, @"<meta property=""og:image"" content=""([^>]+)"">");
       if (matches.Count != 0 && matches[0].Groups.Count > 1) {
-        var bookImgUrl = matches[0].Groups[1].Value;
-        Utils.Write("Retrieving book image... ");
-        var bookImageFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
-        await Utils.DownloadFile(bookImgUrl, bookImageFilePath);
-        BookImage = new Picture(bookImageFilePath);
-        System.IO.File.Delete(bookImageFilePath);
-        Utils.WriteLine("\tDone!", ConsoleColor.Green);
+        BookImgUrl = matches[0].Groups[1].Value;
       }
 
       var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
