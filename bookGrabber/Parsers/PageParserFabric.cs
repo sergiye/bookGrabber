@@ -1,0 +1,25 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace bookGrabber {
+
+  public static class PageParserFabric {
+
+    private static readonly Dictionary<string, Type> parsers = new() {
+      {KnigavuhePageParser.BaseUrl, typeof(KnigavuhePageParser)},
+    };
+
+    public static async Task<PageParser> Create(string url) {
+
+      var parserType = parsers.FirstOrDefault(p => url.StartsWith(p.Key)).Value;
+      if (parserType == null)
+        throw new Exception($"No parser found for url: {url}");
+
+      var parser = (PageParser) Activator.CreateInstance(parserType);
+      await parser.Init(url);
+      return parser;
+    }
+  }
+}

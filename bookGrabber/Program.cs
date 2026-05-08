@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using TagLib;
@@ -16,13 +15,12 @@ namespace bookGrabber {
 
     private static readonly object gate = new object();
     private static int consoleTop;
-    private static string subDirTemplate = "%f %s %n - %t";
 
     static async Task Main(string[] args) {
 
       ServicePointManager.Expect100Continue = false;
       ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-      ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
+      ServicePointManager.ServerCertificateValidationCallback += (_, _, _, _) => true;
 
       var url = args.Length < 1 ? null : args[0];
 
@@ -39,27 +37,6 @@ namespace bookGrabber {
       await DownloadBook(url, maxDownloadThreads, subDir, true);
     }
 
-    /// <summary>
-    /// %f - full author name <br/>
-    /// %s - sequence name <br/>
-    /// %n - sequence number <br/>
-    /// %t - title <br/>
-    /// </summary>
-    /// <param name="author"></param>
-    /// <param name="sequenceName"></param>
-    /// <param name="sequenceNumber"></param>
-    /// <param name="bookTitle"></param>
-    /// <returns></returns>
-    private static string GetTitle(string author, string sequenceName, string sequenceNumber, string bookTitle) {
-      var title = subDirTemplate
-        .Replace("%f", author)
-        .Replace("%t", bookTitle)
-        .Replace("%s", string.IsNullOrEmpty(sequenceName) ? "" : sequenceName)
-        .Replace("%n", string.IsNullOrEmpty(sequenceNumber) ? "" : sequenceNumber)
-        .NormalizeSpaces();
-      return title;
-    }
-
     private static async Task DownloadBook(string url, int maxDownloadThreads, string subDir, bool isFirstBook) {
 
       var errors = new Dictionary<string, Exception>();
@@ -70,94 +47,36 @@ namespace bookGrabber {
           throw new Exception("Book url can not be empty");
 
         Utils.Write("Retrieving book content... ");
-        var content = (await Utils.GetContent(url)).TrimEnd();
+        var parser = await PageParserFabric.Create(url);
         Utils.WriteLine("\tDone!", ConsoleColor.Green);
 
-        var author = string.Empty;
-        var bookTitle = string.Empty;
-        var title = string.Empty;
-        var sequenceNumber = string.Empty;
-        var sequenceName = string.Empty;
-
-        var sequenceNameMatch = Regex.Match(content, @"<div class=""book_serie_block_title"">\s+.+>([^>]+)<\/a>");
-        if (sequenceNameMatch.Success) {
-          sequenceName = sequenceNameMatch.Groups[1].Value;
-        }
-        var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s*(<span.+)?(\s*<a href=""([^""]+)"">)?");
-        if (sequences.Count > 0) {
-          for(var i = 0; i < sequences.Count; i++) {
-            if (sequences[i].Groups[3].Success) continue;
-            var sequenceNumberMatch = Regex.Match(sequences[i].Groups[1].Value, @"<span class=""book_serie_block_item_index"">(\d+\.?\d*)\.<\/span>?");
-            if (sequenceNumberMatch.Groups[1].Success) {
-              sequenceNumber = sequenceNumberMatch.Groups[1].Value;
-            }
-
-            if (sequences.Count > i + 1) {
-              nextBookUrl = sequences[i+1].Groups[3].Value;
-              if (!string.IsNullOrEmpty(nextBookUrl)) {
-                if (!nextBookUrl.StartsWith("http")) {
-                  nextBookUrl = "https://knigavuhe.org" + nextBookUrl;
-                }
-                if (isFirstBook) {
-                  Utils.WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
-                  if (Console.ReadKey().Key == ConsoleKey.Escape)
-                    nextBookUrl = null;
-                }
-              }
-            }
-            break;
-          }
+        nextBookUrl = parser.NextBookUrl;
+        if (isFirstBook && !string.IsNullOrWhiteSpace(nextBookUrl)) {
+          Utils.WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
+          if (Console.ReadKey().Key == ConsoleKey.Escape)
+            nextBookUrl = null;
         }
 
-        var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^""]+) - ([^>]+)"">");
-        if (matches.Count != 0 && matches[0].Groups.Count > 1) {
-          author = Utils.GetValidFileName(matches[0].Groups[1].Value, true);
-          bookTitle = Utils.GetValidFileName(matches[0].Groups[2].Value, true);
-          title = GetTitle(author, sequenceName, sequenceNumber, bookTitle);
-          Console.Title = title;
-        }
-
-        Picture bookImage = null;
-        matches = Regex.Matches(content, @"<meta property=""og:image"" content=""([^>]+)"">");
-        if (matches.Count != 0 && matches[0].Groups.Count > 1) {
-          var bookImgUrl = matches[0].Groups[1].Value;
-          Utils.Write("Retrieving book image... ");
-          var bookImageFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
-          await Utils.DownloadFile(bookImgUrl, bookImageFilePath);
-          bookImage = new Picture(bookImageFilePath);
-          System.IO.File.Delete(bookImageFilePath);
-          Utils.WriteLine("\tDone!", ConsoleColor.Green);
-        }
-
+        Console.Title = parser.Title;
         if (!isFirstBook) {
-          subDir = Utils.GetValidFileName(title, true);
+          subDir = Utils.GetValidFileName(parser.Title, true);
         }
         if (string.IsNullOrEmpty(subDir)) {
           Utils.Write("Press 'Enter' to use '");
-          Utils.Write($"{title}", ConsoleColor.Yellow);
+          Utils.Write($"{parser.Title}", ConsoleColor.Yellow);
           Utils.Write("' as subdir, or enter new one: ");
           var value = Console.ReadLine();
           if (string.IsNullOrWhiteSpace(value)) {
-            subDir = title;
+            subDir = parser.Title;
           }
           else {
             if (value.Contains("%f") || value.Contains("%s") || value.Contains("%n") || value.Contains("%t")) {
-              subDirTemplate = value;
-              value = title = GetTitle(author, sequenceName, sequenceNumber, bookTitle);
+              PageParser.SubDirTemplate = value;
+              value = parser.Title = PageParser.GetTitle(parser.Author, parser.SequenceName, parser.SequenceNumber, parser.BookTitle);
             }
             subDir = Utils.GetValidFileName(value, true);
           }
         }
-
-        var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
-        if (coll.Count == 0 || coll[0].Groups.Count < 2)
-          throw new Exception("No tracks found");
-
-        var jsonData = Regex.Unescape(coll[0].Groups[1].Value);
-
-        var tracks = jsonData.FromJson<TrackInfo[]>();
-        if (tracks == null || tracks.Length == 0)
-          throw new Exception("Error getting list of tracks");
 
         var asm = Assembly.GetExecutingAssembly();
         var outPath = Path.GetDirectoryName(asm.Location) ?? throw new Exception("Invalid assembly location.");
@@ -174,22 +93,22 @@ namespace bookGrabber {
 
         var done = 0;
         var failed = 0;
-        ShowProgress(tracks.Length, done, failed, title);
+        ShowProgress(parser.Tracks.Length, done, failed, parser.Title);
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Normal);
-        TaskbarProgressHelper.SetValue(done, tracks.Length);
+        TaskbarProgressHelper.SetValue(done, parser.Tracks.Length);
 
         var semaphore = new SemaphoreSlim(maxDownloadThreads, maxDownloadThreads);
-        await Task.WhenAll(Enumerable.Range(0, tracks.Length).Select(async i => {
+        await Task.WhenAll(Enumerable.Range(0, parser.Tracks.Length).Select(async i => {
           await semaphore.WaitAsync();
 
-          var track = tracks[i];
+          var track = parser.Tracks[i];
           var trackNum = i + 1;
-          var fileName = $"{trackNum.ToString().PadLeft(tracks.Length.ToString().Length, '0')}.mp3";
+          var fileName = $"{trackNum.ToString().PadLeft(parser.Tracks.Length.ToString().Length, '0')}.mp3";
           // if (useTitle) {
-          //     fileName =  GetValidFileName(track.title, false);
+          //     fileName =  GetValidFileName(track.Title, false);
           // }
           // else if (useUri) {
-          //     Uri uri = new Uri(track.url);
+          //     Uri uri = new Uri(track.Url);
           //     if (uri.IsFile)
           //         fileName = Path.GetFileName(uri.LocalPath);
           //     else if (uri.Segments != null && uri.Segments.Length > 0 && uri.Segments[uri.Segments.Length - 1].EndsWith(".mp3"))
@@ -207,23 +126,23 @@ namespace bookGrabber {
               return;
             }
 
-            await Utils.DownloadFile(track.url, outputPath);
+            await Utils.DownloadFile(track.Url, outputPath);
 
             var f = TagLib.File.Create(outputPath);
             //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
             f.Tag.Track = (uint)trackNum;
-            f.Tag.TrackCount = (uint)tracks.Length;
+            f.Tag.TrackCount = (uint)parser.Tracks.Length;
             if (string.IsNullOrEmpty(f.Tag.Title))
-              f.Tag.Title = track.title;
-            f.Tag.Album = bookTitle;
+              f.Tag.Title = track.Title;
+            f.Tag.Album = parser.BookTitle;
             if (f.Tag.Performers == null || f.Tag.Performers.Length == 0)
-              f.Tag.Performers = new[] { author };
-            else if (f.Tag.Performers[0] != author)
-              f.Tag.Performers = new[] { author }.Union(f.Tag.Performers).ToArray();
+              f.Tag.Performers = [parser.Author];
+            else if (f.Tag.Performers[0] != parser.Author)
+              f.Tag.Performers = new[] { parser.Author }.Union(f.Tag.Performers).ToArray();
             if (f.Tag.AlbumArtists == null || f.Tag.AlbumArtists.Length == 0)
-              f.Tag.AlbumArtists = new[] { author };
-            else if (f.Tag.AlbumArtists[0] != author)
-              f.Tag.AlbumArtists = new[] { author }.Union(f.Tag.AlbumArtists).ToArray();
+              f.Tag.AlbumArtists = [parser.Author];
+            else if (f.Tag.AlbumArtists[0] != parser.Author)
+              f.Tag.AlbumArtists = new[] { parser.Author }.Union(f.Tag.AlbumArtists).ToArray();
 
             var comment = $"saved by bookGrabber from {url}";
             if (string.IsNullOrWhiteSpace(f.Tag.Comment))
@@ -231,8 +150,8 @@ namespace bookGrabber {
             else
               f.Tag.Comment += "\n" + comment;
 
-            if (bookImage != null && bookImage.Type != PictureType.NotAPicture)
-              f.Tag.Pictures = new IPicture[] { bookImage };
+            if (parser.BookImage != null && parser.BookImage.Type != PictureType.NotAPicture)
+              f.Tag.Pictures = [parser.BookImage];
 
             f.Save();
 
@@ -240,15 +159,15 @@ namespace bookGrabber {
           }
           catch (Exception ex) {
             Interlocked.Increment(ref failed);
-            errors[track.url] = ex;
+            errors[track.Url] = ex;
             System.IO.File.Delete(outputPath);
           }
           finally {
             semaphore.Release();
-            ShowProgress(tracks.Length, done, failed, title);
+            ShowProgress(parser.Tracks.Length, done, failed, parser.Title);
             if (failed > 0)
               TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Error);
-            TaskbarProgressHelper.SetValue(done, tracks.Length);
+            TaskbarProgressHelper.SetValue(done, parser.Tracks.Length);
           }
         }).ToArray());
         TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.NoProgress);
