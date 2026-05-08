@@ -8,7 +8,7 @@ namespace bookGrabber {
   public static class PageParserFabric {
 
     private static readonly Dictionary<string, Type> parsers = new() {
-      {KnigavuhePageParser.BaseUrl, typeof(KnigavuhePageParser)},
+      {KnigavuheParser.BaseUrl, typeof(KnigavuheParser)},
     };
 
     public static async Task<PageParser> Create(string url) {

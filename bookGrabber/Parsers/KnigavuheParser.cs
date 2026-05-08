@@ -7,7 +7,7 @@ using TagLib;
 
 namespace bookGrabber {
 
-  public class KnigavuhePageParser : PageParser {
+  public class KnigavuheParser : PageParser {
 
     public const string BaseUrl = "https://knigavuhe.org";
 
