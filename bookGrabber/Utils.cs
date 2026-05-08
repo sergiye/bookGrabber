@@ -28,7 +28,9 @@ namespace bookGrabber {
       );
     }
 
-    public static async Task<string> GetContent(string uri, CancellationToken token = default) {
+    public static async Task<string> GetContent(string uri, string referer = null, CancellationToken token = default) {
+      if (!string.IsNullOrWhiteSpace(referer))
+        httpClient.DefaultRequestHeaders.Referrer = new Uri(referer);
       using (var response = await httpClient.GetAsync(uri, token)) {
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
