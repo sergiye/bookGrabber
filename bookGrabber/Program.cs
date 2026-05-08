@@ -30,9 +30,9 @@ namespace bookGrabber {
         Utils.Write("Enter book or book sequence url: ");
         url = Console.ReadLine();
       }
-      
+
       var subDir = args.Length < 2 ? null : args[1];
-      
+
       if (args.Length < 3 || !int.TryParse(args[2], out var maxDownloadThreads))
         maxDownloadThreads = Environment.ProcessorCount;
 
@@ -59,7 +59,7 @@ namespace bookGrabber {
         .NormalizeSpaces();
       return title;
     }
-    
+
     private static async Task DownloadBook(string url, int maxDownloadThreads, string subDir, bool isFirstBook) {
 
       var errors = new Dictionary<string, Exception>();
@@ -148,7 +148,7 @@ namespace bookGrabber {
             subDir = Utils.GetValidFileName(value, true);
           }
         }
-        
+
         var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
         if (coll.Count == 0 || coll[0].Groups.Count < 2)
           throw new Exception("No tracks found");
@@ -199,7 +199,7 @@ namespace bookGrabber {
             fileName += ".mp3";
 
           var outputPath = Path.Combine(outPath, fileName);
-          
+
           try {
             var fileInfo = new FileInfo(outputPath);
             if (fileInfo.Exists && fileInfo.Length > 0) {
@@ -228,7 +228,7 @@ namespace bookGrabber {
             var comment = $"saved by bookGrabber from {url}";
             if (string.IsNullOrWhiteSpace(f.Tag.Comment))
               f.Tag.Comment = comment;
-            else 
+            else
               f.Tag.Comment += "\n" + comment;
 
             if (bookImage != null && bookImage.Type != PictureType.NotAPicture)

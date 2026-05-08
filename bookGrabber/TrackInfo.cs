@@ -7,5 +7,4 @@
         public int duration { get; set; }
         public float duration_float { get; set; }
     }
-
 }

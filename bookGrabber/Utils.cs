@@ -8,9 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace bookGrabber {
-  
+
   internal static class Utils {
-    
+
     private static readonly HttpClient httpClient;
     private const int BufferSize = 80 * 1024; //80KB
 
@@ -19,7 +19,7 @@ namespace bookGrabber {
         AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
         AllowAutoRedirect = true,
       }) {
-        Timeout = TimeSpan.FromMinutes(5), 
+        Timeout = TimeSpan.FromMinutes(5),
       };
       httpClient.DefaultRequestHeaders.Referrer = new Uri("https://knigavuhe.org/");
       httpClient.DefaultRequestHeaders.Accept.Clear();
@@ -79,7 +79,7 @@ namespace bookGrabber {
       var code = (int) statusCode;
       return
         statusCode == HttpStatusCode.RequestTimeout
-        || code == 429 //too many requests 
+        || code == 429 //too many requests
         || code >= 500 //all server errors
         ;
     }
@@ -95,13 +95,12 @@ namespace bookGrabber {
       if (string.IsNullOrEmpty(input))
         return input;
       var sb = new StringBuilder(input.Length);
-      bool previousIsSpace = false;
-      foreach (char c in input) {
+      var previousIsSpace = false;
+      foreach (var c in input) {
         if (c == ' ') {
-          if (!previousIsSpace) {
-            sb.Append(c);
-            previousIsSpace = true;
-          }
+          if (previousIsSpace) continue;
+          sb.Append(c);
+          previousIsSpace = true;
         }
         else {
           sb.Append(c);
