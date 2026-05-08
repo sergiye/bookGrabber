@@ -50,16 +50,6 @@ namespace bookGrabber {
         var parser = await PageParserFabric.Create(url);
         Utils.WriteLine("\tDone!", ConsoleColor.Green);
 
-        Picture bookImage = null;
-        if (!string.IsNullOrWhiteSpace(parser.BookImgUrl)) {
-          Utils.Write("Retrieving book image... ");
-          var bookImageFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.jpg");
-          await Utils.DownloadFile(parser.BookImgUrl, bookImageFilePath);
-          bookImage = new Picture(bookImageFilePath);
-          System.IO.File.Delete(bookImageFilePath);
-          Utils.WriteLine("\tDone!", ConsoleColor.Green);
-        }
-
         nextBookUrl = parser.NextBookUrl;
         if (isFirstBook && !string.IsNullOrWhiteSpace(nextBookUrl)) {
           Utils.WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
@@ -100,6 +90,16 @@ namespace bookGrabber {
 
         Console.CursorVisible = false;
         consoleTop = Console.CursorTop;
+
+        Picture bookImage = null;
+        if (!string.IsNullOrWhiteSpace(parser.BookImgUrl)) {
+          Utils.Write("Retrieving book image... ");
+          var bookImageFilePath = Path.Combine(outPath, "folder.jpg");
+          await Utils.DownloadFile(parser.BookImgUrl, bookImageFilePath);
+          bookImage = new Picture(bookImageFilePath);
+          // System.IO.File.Delete(bookImageFilePath);
+          Utils.WriteLine("\tDone!", ConsoleColor.Green);
+        }
 
         var done = 0;
         var failed = 0;
