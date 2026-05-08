@@ -3,7 +3,10 @@
 ![Downloads](https://img.shields.io/github/downloads/sergiye/bookGrabber/total?color=ff4f42)
 ![GitHub last commit](https://img.shields.io/github/last-commit/sergiye/bookGrabber?color=00AD00)
 
-bookGrabber - utility for obtaining audiobook files from the site [`Книга в ухе`](https://knigavuhe.org/).
+bookGrabber — command-line utility for downloading audiobooks from supported online sources, organizing audio files, and filling ID3 tags (title, author, cover art, etc.) automatically.
+supported sources:
+* https://knigavuhe.org
+* https://audiobook-mp3.com
 
 ## Features
 
