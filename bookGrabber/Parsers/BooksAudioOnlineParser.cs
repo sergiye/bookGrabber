@@ -37,7 +37,8 @@ namespace bookGrabber {
         throw new Exception("No tracks found");
       }
       var playlistContent = await Utils.GetContent(playlistUrl, BaseUrl);
-      var jsonData = Regex.Unescape(playlistContent);
+      var jsonData = Regex.Unescape(playlistContent)
+        .Replace("\\", "\\\\"); //convert from JavaScript literal
       var playlistItems = jsonData.FromJson<PlayListItem[]>();
       Tracks = playlistItems.Select(i => new TrackInfo {Url = i.File, Title = i.Title}).ToArray();
       if (Tracks == null || Tracks.Length == 0)
