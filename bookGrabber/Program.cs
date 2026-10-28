@@ -96,7 +96,13 @@ namespace bookGrabber {
           Utils.Write("Retrieving book image... ");
           var bookImageFilePath = Path.Combine(outPath, "folder.jpg");
           await Utils.DownloadFile(parser.BookImgUrl, bookImageFilePath);
-          bookImage = new Picture(bookImageFilePath);
+          //bookImage = new Picture(bookImageFilePath);
+          var imageBytes = System.IO.File.ReadAllBytes(bookImageFilePath);
+          var imageFormat = Utils.DetectFormat(imageBytes);
+          if (imageFormat == Utils.ImageFormatType.Webp) {
+            imageBytes = Utils.ConvertWebpToJpeg(imageBytes);
+          }
+          bookImage = new Picture(imageBytes);
           // System.IO.File.Delete(bookImageFilePath);
           Utils.WriteLine("\tDone!", ConsoleColor.Green);
         }

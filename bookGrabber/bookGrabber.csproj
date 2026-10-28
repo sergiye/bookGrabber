@@ -22,7 +22,9 @@
     <UseLocalCommon Condition="'$(UseLocalCommon)' == ''">false</UseLocalCommon>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="PresentationCore" />
     <Reference Include="System.Net.Http" />
+    <Reference Include="WindowsBase" />
     <Reference Include="System.Web.Extensions" />
   </ItemGroup>
   <ItemGroup>

@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Media.Imaging;
 
 namespace bookGrabber {
 
@@ -141,6 +142,58 @@ namespace bookGrabber {
       else
         Console.Write(message);
       Console.ResetColor();
+    }
+
+    public enum ImageFormatType {
+      Unknown,
+      Jpeg,
+      Png,
+      Gif,
+      Webp,
+      Bmp
+    }
+
+    public static ImageFormatType DetectFormat(byte[] data) {
+      if (data.Length < 12)
+        return ImageFormatType.Unknown;
+
+      // JPEG: FF D8
+      if (data[0] == 0xFF && data[1] == 0xD8)
+        return ImageFormatType.Jpeg;
+
+      // PNG: 89 50 4E 47
+      if (data[0] == 0x89 && data[1] == 0x50 &&
+          data[2] == 0x4E && data[3] == 0x47)
+        return ImageFormatType.Png;
+
+      // GIF: GIF87a / GIF89a
+      if (data[0] == 'G' && data[1] == 'I' && data[2] == 'F')
+        return ImageFormatType.Gif;
+
+      // BMP: 42 4D
+      if (data[0] == 0x42 && data[1] == 0x4D)
+        return ImageFormatType.Bmp;
+
+      // WEBP: "RIFF....WEBP"
+      if (data[0] == 'R' && data[1] == 'I' &&
+          data[2] == 'F' && data[3] == 'F' &&
+          data[8] == 'W' && data[9] == 'E' &&
+          data[10] == 'B' && data[11] == 'P')
+        return ImageFormatType.Webp;
+
+      return ImageFormatType.Unknown;
+    }
+
+    public static byte[] ConvertWebpToJpeg(byte[] byteArray) {
+      using (var stream = new MemoryStream(byteArray)) {
+        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        var encoder = new JpegBitmapEncoder { QualityLevel = 80 };
+        encoder.Frames.Add(BitmapFrame.Create(decoder.Frames[0]));
+        using (var outputStream = new MemoryStream()) {
+          encoder.Save(outputStream);
+          return outputStream.ToArray();
+        }
+      }
     }
   }
 }
