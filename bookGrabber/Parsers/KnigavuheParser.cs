@@ -56,14 +56,45 @@ namespace bookGrabber {
         BookImgUrl = matches[0].Groups[1].Value;
       }
 
-      var coll = Regex.Matches(content, @"new BookPlayer\([\d]+,\s(\[[^\[]+\]),\s\[");
-      if (coll.Count == 0 || coll[0].Groups.Count < 2)
+      var playerMatch = Regex.Match(content, @"new BookPlayer\(\d+,\s*\[");
+      if (!playerMatch.Success)
         throw new Exception("No tracks found");
 
-      var jsonData = Regex.Unescape(coll[0].Groups[1].Value);
+      var arrayStart = playerMatch.Index + playerMatch.Length - 1;
+      var arrayEnd = FindArrayEnd(content, arrayStart);
+      if (arrayEnd < 0)
+        throw new Exception("No tracks found");
+
+      var jsonData = Regex.Unescape(content.Substring(arrayStart, arrayEnd - arrayStart + 1));
       Tracks = jsonData.FromJson<TrackInfo[]>();
       if (Tracks == null || Tracks.Length == 0)
         throw new Exception("Error getting list of tracks");
+    }
+
+    //track titles may contain brackets, so skip string literals while matching
+    private static int FindArrayEnd(string content, int start) {
+      var depth = 0;
+      var inString = false;
+      for (var i = start; i < content.Length; i++) {
+        var c = content[i];
+        if (inString) {
+          if (c == '\\') i++;
+          else if (c == '"') inString = false;
+          continue;
+        }
+        switch (c) {
+          case '"':
+            inString = true;
+            break;
+          case '[':
+            depth++;
+            break;
+          case ']':
+            if (--depth == 0) return i;
+            break;
+        }
+      }
+      return -1;
     }
   }
 }
