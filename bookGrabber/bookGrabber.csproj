@@ -7,9 +7,19 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <OutputPath>bin\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>none</DebugType>
+    <Optimize>True</Optimize>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>app.ico</ApplicationIcon>
+    <CommonSourcesDir>$(MSBuildThisFileDirectory)..\..\common\</CommonSourcesDir>
+    <UseLocalCommon Condition="'$(UseLocalCommon)' == '' And Exists('$(CommonSourcesDir)sergiye.Common')">true</UseLocalCommon>
+    <UseLocalCommon Condition="'$(UseLocalCommon)' == ''">false</UseLocalCommon>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Net.Http" />
@@ -18,8 +28,15 @@
   <ItemGroup>
     <Content Include="app.ico" />
   </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalCommon)' == 'true'">
+    <Compile Include="..\..\common\sergiye.Common\Extensions\JsonExtensions.cs" Link="Common\JsonExtensions.cs" />
+    <Compile Include="..\..\common\sergiye.Common\Tools\OSHelper.cs" Link="Common\OSHelper.cs" />
+    <Compile Include="..\..\common\sergiye.Common\Win\TaskbarProgressHelper.cs" Link="Common\TaskbarProgressHelper.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalCommon)' != 'true'">
+    <PackageReference Include="SergiyE.Common" Version="1.*" />
+  </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="sergiye.Common" Version="1.*" />
     <PackageReference Include="Costura.Fody" Version="4.1.0" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>
