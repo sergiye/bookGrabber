@@ -144,7 +144,14 @@ namespace bookGrabber {
 
             await Utils.DownloadFile(track.Url, outputPath);
 
-            var f = TagLib.File.Create(outputPath);
+            TagLib.File f;
+            try {
+              f = TagLib.File.Create(outputPath);
+            }
+            catch (CorruptFileException) {
+              StripId3v2Tags(outputPath);
+              f = TagLib.File.Create(outputPath);
+            }
             //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
             f.Tag.Track = (uint)trackNum;
             f.Tag.TrackCount = (uint)parser.Tracks.Length;
@@ -212,6 +219,20 @@ namespace bookGrabber {
       else if (!string.IsNullOrEmpty(nextBookUrl)) {
         await DownloadBook(nextBookUrl, maxDownloadThreads, null, false);
       }
+    }
+
+    private static void StripId3v2Tags(string path) {
+      var data = System.IO.File.ReadAllBytes(path);
+      var offset = 0;
+      while (data.Length - offset >= 10 && data[offset] == 'I' && data[offset + 1] == 'D' && data[offset + 2] == '3') {
+        var size = (data[offset + 6] & 0x7F) << 21 | (data[offset + 7] & 0x7F) << 14 | (data[offset + 8] & 0x7F) << 7 | (data[offset + 9] & 0x7F);
+        var hasFooter = (data[offset + 5] & 0x10) != 0;
+        offset = Math.Min(data.Length, offset + 10 + size + (hasFooter ? 10 : 0));
+      }
+      if (offset == 0)
+        return;
+      using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+      fs.Write(data, offset, data.Length - offset);
     }
 
     private static void ShowProgress(int count, int done, int failed, string title) {
