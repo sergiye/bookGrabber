@@ -4,22 +4,18 @@ on:
   push:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: nuget/setup-nuget@v2
-      - uses: microsoft/setup-msbuild@v1.1
+      - uses: microsoft/setup-msbuild@v2
         with:
           msbuild-architecture: x64
-
-      - uses: dorny/paths-filter@v2
-        id: changes
-        with:
-          filters: |
-            buildprops:
-              - 'Directory.Build.props'
 
       - name: NuGet restore
         run: nuget restore bookGrabber.sln
@@ -27,9 +23,8 @@ jobs:
       - name: Build
         run: msbuild bookGrabber.sln -p:Configuration=Release -m
 
-      # - name: Publish build
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: bookGrabber
-      #     path: |
-      #       bookGrabber/bin
+      - name: Publish build
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookGrabber
+          path: bookGrabber/bin/*.exe

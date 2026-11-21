@@ -1,20 +1,14 @@
-﻿using sergiye.Common;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
-using TagLib;
 
 namespace bookGrabber {
 
   internal class Program {
-
-    private static readonly object gate = new object();
-    private static int consoleTop;
 
     static async Task Main(string[] args) {
 
@@ -29,229 +23,140 @@ namespace bookGrabber {
         url = Console.ReadLine();
       }
 
-      var subDir = args.Length < 2 ? null : args[1];
+      var context = new DownloadContext {
+        SubDir = args.Length < 2 ? null : args[1],
+        MaxThreads = args.Length >= 3 && int.TryParse(args[2], out var threads) && threads > 0 ? threads : Environment.ProcessorCount,
+        IsFirstBook = true,
+      };
 
-      if (args.Length < 3 || !int.TryParse(args[2], out var maxDownloadThreads))
-        maxDownloadThreads = Environment.ProcessorCount;
+      while (true) {
+        var result = await DownloadBook(url, context);
+        ShowSummary(result);
 
-      await DownloadBook(url, maxDownloadThreads, subDir, true);
+        if (result.Errors.Count > 0) {
+          Utils.WriteLine("Press any key to retry download or 'Esc' to exit...");
+          var key = Utils.ReadKey();
+          if (key.HasValue && key.Value != ConsoleKey.Escape)
+            continue;
+          return;
+        }
+
+        if (string.IsNullOrEmpty(result.NextBookUrl))
+          return;
+
+        url = result.NextBookUrl;
+        context.IsFirstBook = false;
+        context.SubDir = null;
+      }
     }
 
-    private static async Task DownloadBook(string url, int maxDownloadThreads, string subDir, bool isFirstBook) {
+    private static async Task<BookResult> DownloadBook(string url, DownloadContext context) {
 
-      var errors = new Dictionary<string, Exception>();
-      var nextBookUrl = string.Empty;
+      var result = new BookResult();
+      ProgressView view = null;
 
       try {
         if (string.IsNullOrWhiteSpace(url))
           throw new Exception("Book url can not be empty");
 
         Utils.Write("Retrieving book content... ");
-        var parser = await PageParserFabric.Create(url);
+        var parser = await PageParserFactory.Create(url);
         Utils.WriteLine("\tDone!", ConsoleColor.Green);
 
-        nextBookUrl = parser.NextBookUrl;
-        if (isFirstBook && !string.IsNullOrWhiteSpace(nextBookUrl)) {
-          Utils.WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
-          if (Console.ReadKey().Key == ConsoleKey.Escape)
-            nextBookUrl = null;
+        result.NextBookUrl = parser.NextBookUrl;
+        if (context.IsFirstBook && !string.IsNullOrWhiteSpace(result.NextBookUrl)) {
+          if (context.DownloadSeries == null) {
+            Utils.WriteLine("Download other books in series? Press 'Esc' to cancel or any other key to agree...");
+            var key = Utils.ReadKey();
+            context.DownloadSeries = key.HasValue && key.Value != ConsoleKey.Escape;
+          }
+          if (context.DownloadSeries != true)
+            result.NextBookUrl = null;
         }
 
-        Console.Title = parser.Title;
-        if (!isFirstBook) {
-          subDir = Utils.GetValidFileName(parser.Title, true);
-        }
-        if (string.IsNullOrEmpty(subDir)) {
-          Utils.Write("Press 'Enter' to use '");
-          Utils.Write($"{parser.Title}", ConsoleColor.Yellow);
-          Utils.Write("' as subdir, or enter new one: ");
-          var value = Console.ReadLine();
-          if (string.IsNullOrWhiteSpace(value)) {
-            subDir = parser.Title;
-          }
-          else {
-            if (value.Contains("%f") || value.Contains("%s") || value.Contains("%n") || value.Contains("%t")) {
-              PageParser.SubDirTemplate = value;
-              value = parser.Title = PageParser.GetTitle(parser.Author, parser.SequenceName, parser.SequenceNumber, parser.BookTitle);
-            }
-            subDir = Utils.GetValidFileName(value, true);
-          }
-        }
+        Utils.SetTitle(parser.Title);
+        if (!context.IsFirstBook)
+          context.SubDir = Utils.GetValidFileName(parser.Title, true);
+        if (string.IsNullOrEmpty(context.SubDir))
+          context.SubDir = AskSubDir(parser);
 
-        var asm = Assembly.GetExecutingAssembly();
-        var outPath = Path.GetDirectoryName(asm.Location) ?? throw new Exception("Invalid assembly location.");
-        if (!string.IsNullOrEmpty(subDir)) {
-          outPath = Path.Combine(outPath, subDir);
+        var outPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? throw new Exception("Invalid assembly location.");
+        if (!string.IsNullOrEmpty(context.SubDir)) {
+          outPath = Path.Combine(outPath, context.SubDir);
           Directory.CreateDirectory(outPath);
         }
 
         Utils.Write("Target folder: ");
         Utils.WriteLine(outPath, ConsoleColor.DarkCyan);
 
-        Console.CursorVisible = false;
-        consoleTop = Console.CursorTop;
+        Utils.SetCursorVisible(false);
+        view = new ProgressView(parser.Tracks.Length, parser.Title);
 
-        Picture bookImage = null;
-        if (!string.IsNullOrWhiteSpace(parser.BookImgUrl)) {
-          Utils.Write("Retrieving book image... ");
-          var bookImageFilePath = Path.Combine(outPath, "folder.jpg");
-          await Utils.DownloadFile(parser.BookImgUrl, bookImageFilePath);
-          //bookImage = new Picture(bookImageFilePath);
-          var imageBytes = System.IO.File.ReadAllBytes(bookImageFilePath);
-          var imageFormat = Utils.DetectFormat(imageBytes);
-          if (imageFormat == Utils.ImageFormatType.Webp) {
-            imageBytes = Utils.ConvertWebpToJpeg(imageBytes);
-          }
-          bookImage = new Picture(imageBytes);
-          // System.IO.File.Delete(bookImageFilePath);
-          Utils.WriteLine("\tDone!", ConsoleColor.Green);
+        var downloader = new BookDownloader(parser, outPath, url, context.MaxThreads, view);
+        try {
+          await downloader.Run();
+        }
+        finally {
+          result.Errors.AddRange(downloader.Errors.OrderBy(p => p.Key));
+          result.Warnings.AddRange(downloader.Warnings.OrderBy(p => p.Key));
         }
 
-        var done = 0;
-        var failed = 0;
-        ShowProgress(parser.Tracks.Length, done, failed, parser.Title);
-        TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Normal);
-        TaskbarProgressHelper.SetValue(done, parser.Tracks.Length);
-
-        var semaphore = new SemaphoreSlim(maxDownloadThreads, maxDownloadThreads);
-        await Task.WhenAll(Enumerable.Range(0, parser.Tracks.Length).Select(async i => {
-          await semaphore.WaitAsync();
-
-          var track = parser.Tracks[i];
-          var trackNum = i + 1;
-          var fileName = $"{trackNum.ToString().PadLeft(parser.Tracks.Length.ToString().Length, '0')}.mp3";
-          // if (useTitle) {
-          //     fileName =  GetValidFileName(track.Title, false);
-          // }
-          // else if (useUri) {
-          //     Uri uri = new Uri(track.Url);
-          //     if (uri.IsFile)
-          //         fileName = Path.GetFileName(uri.LocalPath);
-          //     else if (uri.Segments != null && uri.Segments.Length > 0 && uri.Segments[uri.Segments.Length - 1].EndsWith(".mp3"))
-          //         fileName = uri.Segments[uri.Segments.Length - 1];
-          // }
-          if (Path.GetExtension(fileName) != ".mp3")
-            fileName += ".mp3";
-
-          var outputPath = Path.Combine(outPath, fileName);
-
-          try {
-            var fileInfo = new FileInfo(outputPath);
-            if (fileInfo.Exists && fileInfo.Length > 0) {
-              Interlocked.Increment(ref done);
-              return;
-            }
-
-            await Utils.DownloadFile(track.Url, outputPath);
-
-            TagLib.File f;
-            try {
-              f = TagLib.File.Create(outputPath);
-            }
-            catch (CorruptFileException) {
-              StripId3v2Tags(outputPath);
-              f = TagLib.File.Create(outputPath);
-            }
-            //Console.WriteLine("Title: {0}, duration: {1}", tfile.Tag.Title, tfile.Properties.Duration);
-            f.Tag.Track = (uint)trackNum;
-            f.Tag.TrackCount = (uint)parser.Tracks.Length;
-            if (string.IsNullOrEmpty(f.Tag.Title))
-              f.Tag.Title = track.Title;
-            f.Tag.Album = parser.BookTitle;
-            if (f.Tag.Performers == null || f.Tag.Performers.Length == 0)
-              f.Tag.Performers = [parser.Author];
-            else if (f.Tag.Performers[0] != parser.Author)
-              f.Tag.Performers = new[] { parser.Author }.Union(f.Tag.Performers).ToArray();
-            if (f.Tag.AlbumArtists == null || f.Tag.AlbumArtists.Length == 0)
-              f.Tag.AlbumArtists = [parser.Author];
-            else if (f.Tag.AlbumArtists[0] != parser.Author)
-              f.Tag.AlbumArtists = new[] { parser.Author }.Union(f.Tag.AlbumArtists).ToArray();
-
-            var comment = $"saved by bookGrabber from {url}";
-            if (string.IsNullOrWhiteSpace(f.Tag.Comment))
-              f.Tag.Comment = comment;
-            else
-              f.Tag.Comment += "\n" + comment;
-
-            if (bookImage != null && bookImage.Type != PictureType.NotAPicture)
-              f.Tag.Pictures = [bookImage];
-
-            f.Save();
-
-            Interlocked.Increment(ref done);
-          }
-          catch (Exception ex) {
-            Interlocked.Increment(ref failed);
-            errors[track.Url] = ex;
-            System.IO.File.Delete(outputPath);
-          }
-          finally {
-            semaphore.Release();
-            ShowProgress(parser.Tracks.Length, done, failed, parser.Title);
-            if (failed > 0)
-              TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.Error);
-            TaskbarProgressHelper.SetValue(done, parser.Tracks.Length);
-          }
-        }).ToArray());
-        TaskbarProgressHelper.SetState(TaskbarProgressHelper.TaskbarStates.NoProgress);
-
-        Utils.SafeSetCursorPosition(0, consoleTop + 3);
+        Utils.SafeSetCursorPosition(0, view.Top + 3);
         Utils.WriteLine("Finished", ConsoleColor.DarkCyan);
       }
       catch (Exception ex) {
-        errors["internal"] = ex;
+        result.Errors.Add(new KeyValuePair<string, Exception>("internal", ex));
       }
 
-      Console.CursorVisible = true;
-      Utils.SafeSetCursorPosition(0, consoleTop + 5);
+      Utils.SetCursorVisible(true);
+      if (view != null)
+        Utils.SafeSetCursorPosition(0, view.Top + 5);
+      return result;
+    }
 
-      if (errors.Count > 0) {
+    private static string AskSubDir(PageParser parser) {
+      Utils.Write("Press 'Enter' to use '");
+      Utils.Write($"{parser.Title}", ConsoleColor.Yellow);
+      Utils.Write("' as subdir, or enter new one: ");
+      var value = Console.ReadLine();
+      if (string.IsNullOrWhiteSpace(value))
+        return parser.Title;
+
+      if (value.Contains("%f") || value.Contains("%s") || value.Contains("%n") || value.Contains("%t")) {
+        PageParser.SubDirTemplate = value;
+        value = parser.Title = PageParser.GetTitle(parser.Author, parser.SequenceName, parser.SequenceNumber, parser.BookTitle);
+      }
+      return Utils.GetValidFileName(value, true);
+    }
+
+    private static void ShowSummary(BookResult result) {
+      if (result.Warnings.Count > 0) {
+        Utils.WriteLine("Warnings summary:");
+        foreach (var p in result.Warnings) {
+          Utils.Write($" - Error writing tags to {p.Key}: ", ConsoleColor.Yellow);
+          Utils.WriteLine(p.Value.Message);
+        }
+      }
+      if (result.Errors.Count > 0) {
         Utils.WriteLine("Errors summary:");
-        foreach (var p in errors) {
+        foreach (var p in result.Errors) {
           Utils.Write($" - Error loading {p.Key}: ", ConsoleColor.Red);
           Utils.WriteLine($"{p.Value.Message}", ConsoleColor.Yellow);
         }
-
-        Utils.WriteLine("Press any key to retry download or 'Esc' to exit...");
-        if (Console.ReadKey().Key != ConsoleKey.Escape)
-          await DownloadBook(url, maxDownloadThreads, subDir, isFirstBook);
-      }
-      else if (!string.IsNullOrEmpty(nextBookUrl)) {
-        await DownloadBook(nextBookUrl, maxDownloadThreads, null, false);
       }
     }
 
-    private static void StripId3v2Tags(string path) {
-      var data = System.IO.File.ReadAllBytes(path);
-      var offset = 0;
-      while (data.Length - offset >= 10 && data[offset] == 'I' && data[offset + 1] == 'D' && data[offset + 2] == '3') {
-        var size = (data[offset + 6] & 0x7F) << 21 | (data[offset + 7] & 0x7F) << 14 | (data[offset + 8] & 0x7F) << 7 | (data[offset + 9] & 0x7F);
-        var hasFooter = (data[offset + 5] & 0x10) != 0;
-        offset = Math.Min(data.Length, offset + 10 + size + (hasFooter ? 10 : 0));
-      }
-      if (offset == 0)
-        return;
-      using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
-      fs.Write(data, offset, data.Length - offset);
+    private class DownloadContext {
+      public string SubDir;
+      public int MaxThreads;
+      public bool IsFirstBook;
+      public bool? DownloadSeries;
     }
 
-    private static void ShowProgress(int count, int done, int failed, string title) {
-      lock (gate) {
-        Utils.SafeSetCursorPosition(0, consoleTop + 1);
-        Utils.Write("Downloading ", ConsoleColor.White);
-        Utils.Write($"{count}", ConsoleColor.Cyan);
-        Utils.Write(" tracks, done: ", ConsoleColor.White);
-        Utils.Write($"{done}", ConsoleColor.Green);
-        if (failed > 0) {
-          Utils.Write(", failed: ", ConsoleColor.White);
-          Utils.Write($"{failed}", ConsoleColor.Red);
-        }
-
-        Utils.Write(", completed: ", ConsoleColor.White);
-        var percents = (done + failed) * 100 / count;
-        Utils.Write($"{percents}%", ConsoleColor.Yellow);
-        Console.Title = $"{percents}% {title}";
-      }
+    private class BookResult {
+      public string NextBookUrl;
+      public readonly List<KeyValuePair<string, Exception>> Errors = new List<KeyValuePair<string, Exception>>();
+      public readonly List<KeyValuePair<string, Exception>> Warnings = new List<KeyValuePair<string, Exception>>();
     }
   }
 }

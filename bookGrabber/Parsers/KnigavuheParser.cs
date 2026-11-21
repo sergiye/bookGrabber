@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using sergiye.Common;
@@ -16,13 +17,12 @@ namespace bookGrabber {
 
       var content = (await Utils.GetContent(url)).TrimEnd();
 
-      var sequenceNameMatch = Regex.Match(content, @"<div class=""book_serie_block_title"">\s+.+>([^>]+)<\/a>");
-      SequenceName = sequenceNameMatch.Success
-        ? sequenceNameMatch.Groups[1].Value
-        : string.Empty;
+      ResetInfo();
 
-      SequenceNumber = string.Empty;
-      NextBookUrl = string.Empty;
+      var sequenceNameMatch = Regex.Match(content, @"<div class=""book_serie_block_title"">\s+.+>([^>]+)<\/a>");
+      if (sequenceNameMatch.Success)
+        SequenceName = WebUtility.HtmlDecode(sequenceNameMatch.Groups[1].Value);
+
       var sequences = Regex.Matches(content, @"<div class=""book_serie_block_item"">\s*(<span.+)?(\s*<a href=""([^""]+)"">)?");
       if (sequences.Count > 0) {
         for (var i = 0; i < sequences.Count; i++) {
@@ -32,29 +32,22 @@ namespace bookGrabber {
             SequenceNumber = sequenceNumberMatch.Groups[1].Value;
           }
           if (sequences.Count > i + 1) {
-            NextBookUrl = sequences[i + 1].Groups[3].Value;
-            if (!string.IsNullOrEmpty(NextBookUrl) && !NextBookUrl.StartsWith("http")) {
-              NextBookUrl = BaseUrl + NextBookUrl;
-            }
+            NextBookUrl = ResolveUrl(url, sequences[i + 1].Groups[3].Value) ?? string.Empty;
           }
           break;
         }
       }
 
-      Author = string.Empty;
-      BookTitle = string.Empty;
-      Title = string.Empty;
-      var matches = Regex.Matches(content, @"<meta property=""og:title"" content=""([^""]+) - ([^>]+)"">");
-      if (matches.Count != 0 && matches[0].Groups.Count > 1) {
-        Author = Utils.GetValidFileName(matches[0].Groups[1].Value, true);
-        BookTitle = Utils.GetValidFileName(matches[0].Groups[2].Value, true);
-        Title = GetTitle(Author, SequenceName, SequenceNumber, BookTitle);
+      var ogTitle = GetMetaContent(content, "og:title");
+      if (!string.IsNullOrWhiteSpace(ogTitle)) {
+        //format is "author - title"
+        if (SplitTitle(ogTitle, false, out var author, out var title))
+          SetTitles(author, title);
+        else
+          SetTitles(string.Empty, ogTitle);
       }
 
-      matches = Regex.Matches(content, @"<meta property=""og:image"" content=""([^>]+)"">");
-      if (matches.Count != 0 && matches[0].Groups.Count > 1) {
-        BookImgUrl = matches[0].Groups[1].Value;
-      }
+      BookImgUrl = ResolveUrl(url, GetMetaContent(content, "og:image"));
 
       var playerMatch = Regex.Match(content, @"new BookPlayer\(\d+,\s*\[");
       if (!playerMatch.Success)
@@ -65,7 +58,7 @@ namespace bookGrabber {
       if (arrayEnd < 0)
         throw new Exception("No tracks found");
 
-      var jsonData = Regex.Unescape(content.Substring(arrayStart, arrayEnd - arrayStart + 1));
+      var jsonData = Utils.NormalizeJsLiteral(content.Substring(arrayStart, arrayEnd - arrayStart + 1));
       Tracks = jsonData.FromJson<TrackInfo[]>();
       if (Tracks == null || Tracks.Length == 0)
         throw new Exception("Error getting list of tracks");

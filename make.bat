@@ -5,7 +5,7 @@ SET msbuild="%%F"
 )
 ECHO %msbuild%
 
-@%msbuild% bookGrabber.sln /t:restore /p:RestorePackagesConfig=true
+@%msbuild% bookGrabber.sln /t:restore
 @%msbuild% bookGrabber.sln /t:Rebuild /p:DebugType=None /p:Configuration=Release
 
 if errorlevel 1 goto error
